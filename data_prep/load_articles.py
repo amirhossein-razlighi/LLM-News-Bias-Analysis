@@ -136,14 +136,14 @@ def print_dataset_stats(df: pd.DataFrame) -> None:
     bias_counts = df["bias_text"].value_counts()
     for label, count in bias_counts.items():
         pct = 100 * count / len(df)
-        print(f"  {label:<10}: {count:>6,}  ({pct:.1f}%)")
+        print(f"{label:<10}: {count:>6,} ({pct:.1f}%)")
 
-    print(f"\nUnique sources       : {df['source'].nunique()}")
-    print(f"Unique topics        : {df['topic'].nunique()}")
+    print(f"\nUnique sources : {df['source'].nunique()}")
+    print(f"Unique topics : {df['topic'].nunique()}")
 
     print(f"\nTop 10 topics:")
     for topic, count in df["topic"].value_counts().head(10).items():
-        print(f"  {topic:<30}: {count}")
+        print(f"{topic:<30}: {count}")
 
     df["content_len"] = df["content_original"].str.len()
     print(f"\nContent length:")

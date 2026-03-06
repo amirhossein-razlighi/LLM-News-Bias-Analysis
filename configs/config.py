@@ -1,6 +1,6 @@
 import os
 
-DATASET_ROOT = os.environ.get("DATASET_ROOT", "./n")
+DATASET_ROOT = os.environ.get("DATASET_ROOT", "../")
 
 JSONS_DIR = os.path.join(DATASET_ROOT, "data", "jsons")
 

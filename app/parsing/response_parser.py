@@ -62,6 +62,23 @@ def _normalize_selected_article_id(
     return _fallback_extract_article_id(candidate, allowed_article_ids)
 
 
+def _extract_json_like_field(text: str, field_name: str) -> str | None:
+    # First try strict JSON-string field parsing.
+    strict_pattern = rf'"{re.escape(field_name)}"\s*:\s*"((?:\\.|[^"\\])*)"\s*(?=,\s*"[A-Za-z0-9_]+"\s*:|\}})'
+    strict_match = re.search(strict_pattern, text, flags=re.DOTALL)
+    if strict_match is not None:
+        value = strict_match.group(1)
+        return bytes(value, "utf-8").decode("unicode_escape")
+
+    # Then tolerate malformed values that contain unescaped quotes.
+    tolerant_pattern = rf'"{re.escape(field_name)}"\s*:\s*"(?P<value>.*?)"\s*(?=,\s*"[A-Za-z0-9_]+"\s*:|\}})'
+    tolerant_match = re.search(tolerant_pattern, text, flags=re.DOTALL)
+    if tolerant_match is not None:
+        return tolerant_match.group("value").strip()
+
+    return None
+
+
 def parse_model_response(text: str, allowed_article_ids: set[str]) -> ParseResult:
     json_blob = _extract_first_json_object(text)
     if json_blob is not None:
@@ -88,6 +105,20 @@ def parse_model_response(text: str, allowed_article_ids: set[str]) -> ParseResul
                 error="selected_article_id missing or not in candidates",
             )
         except json.JSONDecodeError as exc:
+            recovered_selected_article_id = _normalize_selected_article_id(
+                _extract_json_like_field(json_blob, "selected_article_id"),
+                allowed_article_ids,
+            )
+            if recovered_selected_article_id is not None:
+                recovered_reason = _extract_json_like_field(json_blob, "reason")
+                return ParseResult(
+                    selected_article_id=recovered_selected_article_id,
+                    reason=recovered_reason,
+                    status=ParseStatus.SUCCESS,
+                    parsed_json=None,
+                    error=f"Recovered from malformed JSON: {exc}",
+                )
+
             fallback_id = _fallback_extract_article_id(text, allowed_article_ids)
             if fallback_id is not None:
                 return ParseResult(

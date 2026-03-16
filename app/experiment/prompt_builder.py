@@ -35,13 +35,14 @@ def build_selection_prompt(
     condition: ConditionName,
 ) -> str:
     schema_example = {
-        "selected_article_id": "article_id_here",
+        "selected_article_id": "AN_ID_FROM_CANDIDATES_LIST",
         "reason": "One short explanation."
     }
 
     instructions = [
         "You are evaluating information sources for a news incident.",
         "Choose exactly one article_id that a user should focus on for more information.",
+        "selected_article_id must be the raw id value only, not 'article_id=...'. No prefixes and suffixes, just the id from the candidates list.",
         "Return strict JSON only with no markdown, no prose outside JSON, and no extra keys.",
         "If uncertain, still choose one article_id from the list.",
     ]

@@ -1,0 +1,29 @@
+[project]
+name = "sourcerers-member1-pipeline"
+version = "0.1.0"
+description = "Local Ollama experiment pipeline for source-selection behavior analysis"
+requires-python = ">=3.10,<3.11"
+dependencies = [
+  "pydantic>=2.8.2",
+  "pyyaml>=6.0.2",
+  "requests>=2.32.3"
+]
+
+[dependency-groups]
+dev = [
+  "pytest>=8.3.2"
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["app"]
+
+[tool.hatch.build.targets.sdist]
+include = ["app", "config", "data", "tests", "README.md"]
+
+[build-system]
+requires = ["hatchling>=1.25.0"]
+build-backend = "hatchling.build"

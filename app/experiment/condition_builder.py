@@ -83,14 +83,20 @@ def build_condition_bundles(
     conditions: list[ConditionName],
     max_combinations: int = 3,
     seed: int = 42,
+    shuffle_candidates: bool = False,
 ) -> dict[ConditionName, list[list[PresentedArticle]]]:
     grouped = _group_by_leaning(incident)
     triplets = _sample_triplets(grouped, max_combinations=max_combinations, seed=seed)
 
     result: dict[ConditionName, list[list[PresentedArticle]]] = {}
-    for condition in conditions:
-        result[condition] = [
-            _presented_articles_for_condition(triplet, condition)
-            for triplet in triplets
-        ]
+    for condition_idx, condition in enumerate(conditions):
+        condition_bundles: list[list[PresentedArticle]] = []
+        for triplet_idx, triplet in enumerate(triplets):
+            presented = _presented_articles_for_condition(triplet, condition)
+            if shuffle_candidates and len(presented) > 1:
+                # Make candidate order reproducible for a given seed/condition/triplet.
+                order_rng = random.Random(seed + (condition_idx * 1009) + (triplet_idx * 9176))
+                order_rng.shuffle(presented)
+            condition_bundles.append(presented)
+        result[condition] = condition_bundles
     return result

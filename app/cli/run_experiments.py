@@ -38,6 +38,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--retries", type=int, default=2)
     parser.add_argument("--base-url", default="http://localhost:11434")
+    parser.add_argument(
+        "--shuffle-candidates",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Randomize candidate display order per bundle for position-bias control",
+    )
     return parser.parse_args()
 
 
@@ -71,6 +77,7 @@ def main() -> None:
             conditions=conditions,
             max_combinations=args.max_combinations,
             seed=args.seed,
+            shuffle_candidates=args.shuffle_candidates,
         )
 
         for model in manifest.models:
@@ -92,7 +99,9 @@ def main() -> None:
                         prompt=prompt,
                         candidates=candidates,
                     )
-                    request_records.append(request.model_dump(mode="json"))
+                    request_record = request.model_dump(mode="json")
+                    request_record["candidate_order"] = [c.article_id for c in candidates]
+                    request_records.append(request_record)
 
                     try:
                         generation = client.generate(
@@ -116,6 +125,7 @@ def main() -> None:
                                 "model_name": model.name,
                                 "condition": condition.value,
                                 "bundle_index": bundle_idx,
+                                "candidate_order": [c.article_id for c in candidates],
                                 "raw_payload": generation.raw_payload,
                             }
                         )

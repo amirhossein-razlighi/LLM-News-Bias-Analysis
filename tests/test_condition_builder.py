@@ -34,3 +34,33 @@ def test_manipulated_sources_rotates_outlets() -> None:
     )
     presented = bundles[ConditionName.HEADLINES_WITH_MANIPULATED_SOURCES][0]
     assert [p.outlet_name for p in presented] == ["CO", "RO", "LO"]
+
+
+def test_shuffle_candidates_is_reproducible_for_seed() -> None:
+    bundles_a = build_condition_bundles(
+        _incident(),
+        conditions=[ConditionName.HEADLINES_ONLY],
+        seed=11,
+        shuffle_candidates=True,
+    )
+    bundles_b = build_condition_bundles(
+        _incident(),
+        conditions=[ConditionName.HEADLINES_ONLY],
+        seed=11,
+        shuffle_candidates=True,
+    )
+
+    order_a = [p.article_id for p in bundles_a[ConditionName.HEADLINES_ONLY][0]]
+    order_b = [p.article_id for p in bundles_b[ConditionName.HEADLINES_ONLY][0]]
+    assert order_a == order_b
+
+
+def test_shuffle_candidates_preserves_member_set() -> None:
+    bundles = build_condition_bundles(
+        _incident(),
+        conditions=[ConditionName.HEADLINES_WITH_SOURCES],
+        seed=17,
+        shuffle_candidates=True,
+    )
+    presented = bundles[ConditionName.HEADLINES_WITH_SOURCES][0]
+    assert sorted(p.article_id for p in presented) == ["c1", "l1", "r1"]

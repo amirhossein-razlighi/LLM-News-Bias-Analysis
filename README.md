@@ -47,6 +47,9 @@ uv run python -m app.cli.run_experiments \
 	--conditions headlines_only headlines_with_sources sources_only headlines_with_manipulated_sources \
 	--max-combinations 3 \
 	--seed 42
+
+# Candidate order is randomized by default for position-bias control.
+# To disable: add --no-shuffle-candidates
 ```
 
 Benchmark latency across models:

@@ -1,6 +1,9 @@
 import os
+from pathlib import Path
 
-DATASET_ROOT = os.environ.get("DATASET_ROOT", "../")
+# Default to the NLP_Project directory (parent of this configs/ folder)
+_DEFAULT_ROOT = str(Path(__file__).resolve().parent.parent)
+DATASET_ROOT = os.environ.get("DATASET_ROOT", _DEFAULT_ROOT)
 
 JSONS_DIR = os.path.join(DATASET_ROOT, "data", "jsons")
 

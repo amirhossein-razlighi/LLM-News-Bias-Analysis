@@ -1,17 +1,22 @@
-from configs.config import (
-    CONTENT_TRUNCATE_CHARS,
-    EMBEDDING_MODEL,
-    EMBEDDING_TEXT_FIELD,
-    OUTPUT_DIR,
-    LOG_LEVEL,
-)
-import logging
-import os
-import sys
-from pathlib import Path
-
-import numpy as np
 import pandas as pd
+import numpy as np
+from pathlib import Path
+import sys
+import os
+import logging
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+try:
+    from configs.config import (
+        CONTENT_TRUNCATE_CHARS,
+        EMBEDDING_MODEL,
+        EMBEDDING_TEXT_FIELD,
+        OUTPUT_DIR,
+        LOG_LEVEL,
+    )
+except ImportError as e:
+    print(f"Error importing config: {e}")
+    sys.exit(1)
+
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 

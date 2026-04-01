@@ -1,20 +1,23 @@
-from tqdm import tqdm
-import pandas as pd
-from typing import Optional
-import os
-import logging
 import json
-from configs.config import (
-    BIAS_LABEL_MAP,
-    BIAS_TEXT_MAP,
-    JSONS_DIR,
-    OUTPUT_DIR,
-    LOG_LEVEL,
-)
-import sys
+import logging
+import os
+from typing import Optional
+import pandas as pd
+from tqdm import tqdm
 from pathlib import Path
-
+import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+try:
+    from configs.config import (
+        BIAS_LABEL_MAP,
+        BIAS_TEXT_MAP,
+        JSONS_DIR,
+        OUTPUT_DIR,
+        LOG_LEVEL,
+    )
+except ImportError as e:
+    print(f"Error importing config: {e}")
+    sys.exit(1)
 
 
 logging.basicConfig(

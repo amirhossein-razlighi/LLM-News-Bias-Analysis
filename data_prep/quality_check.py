@@ -1,12 +1,16 @@
 import pandas as pd
 import logging
 import json
-from configs.config import INCIDENTS_JSONL, OUTPUT_DIR, LOG_LEVEL
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+try:
+    from configs.config import INCIDENTS_JSONL, OUTPUT_DIR, LOG_LEVEL
+except ImportError as e:
+    print(f"Error importing config: {e}")
+    sys.exit(1)
 
 logging.basicConfig(
     level=getattr(logging, LOG_LEVEL),

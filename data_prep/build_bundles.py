@@ -1,3 +1,5 @@
+from pathlib import Path
+import sys
 from tqdm import tqdm
 import pandas as pd
 import numpy as np
@@ -6,19 +8,20 @@ from collections import defaultdict
 import os
 import logging
 import json
-from configs.config import (
-    COMMUNITY_DETECTION_THRESHOLD,
-    INCIDENTS_JSONL,
-    MAX_ARTICLES_PER_LEANING,
-    MIN_BIAS_DIVERSITY,
-    MIN_COMMUNITY_SIZE,
-    OUTPUT_DIR,
-    LOG_LEVEL,
-)
-import sys
-from pathlib import Path
-
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+try:
+    from configs.config import (
+        COMMUNITY_DETECTION_THRESHOLD,
+        INCIDENTS_JSONL,
+        MAX_ARTICLES_PER_LEANING,
+        MIN_BIAS_DIVERSITY,
+        MIN_COMMUNITY_SIZE,
+        OUTPUT_DIR,
+        LOG_LEVEL,
+    )
+except ImportError as e:
+    print(f"Error importing config: {e}")
+    sys.exit(1)
 
 
 logging.basicConfig(

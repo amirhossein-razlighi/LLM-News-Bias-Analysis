@@ -1,5 +1,5 @@
 # Byte-compiled / optimized / DLL files
-outputs/
+outputs/articles_clean.parquet
 __pycache__/
 *.py[codz]
 *$py.class

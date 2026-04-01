@@ -1,3 +1,9 @@
+from tqdm import tqdm
+import pandas as pd
+from typing import Optional
+import os
+import logging
+import json
 from configs.config import (
     BIAS_LABEL_MAP,
     BIAS_TEXT_MAP,
@@ -5,17 +11,11 @@ from configs.config import (
     OUTPUT_DIR,
     LOG_LEVEL,
 )
-import json
-import logging
-import os
 import sys
 from pathlib import Path
-from typing import Optional
-
-import pandas as pd
-from tqdm import tqdm
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
 
 logging.basicConfig(
     level=getattr(logging, LOG_LEVEL),
@@ -26,7 +26,7 @@ log = logging.getLogger(__name__)
 
 def load_single_article(path: Path) -> Optional[dict]:
     """
-    Load and parse one JSON article file. 
+    Load and parse one JSON article file.
     Returns None on failure.
     """
     try:
@@ -99,7 +99,7 @@ def load_all_articles(jsons_dir: str = JSONS_DIR) -> pd.DataFrame:
     if not jsons_path.exists():
         raise FileNotFoundError(
             f"JSONs directory not found: {jsons_path}\n"
-            "Make sure you've cloned the dataset repo and set DATASET_ROOT correctly in config.py."
+            "Make sure you've set DATASET_ROOT correctly (e.g. DATASET_ROOT=. python data_prep/load_articles.py)."
         )
 
     json_files = sorted(jsons_path.glob("*.json"))
@@ -139,18 +139,18 @@ def print_dataset_stats(df: pd.DataFrame) -> None:
         print(f"{label:<10}: {count:>6,} ({pct:.1f}%)")
 
     print(f"\nUnique sources : {df['source'].nunique()}")
-    print(f"Unique topics : {df['topic'].nunique()}")
+    print(f"Unique topics  : {df['topic'].nunique()}")
 
     print(f"\nTop 10 topics:")
     for topic, count in df["topic"].value_counts().head(10).items():
-        print(f"{topic:<30}: {count}")
+        print(f"  {topic:<30}: {count}")
 
     df["content_len"] = df["content_original"].str.len()
-    print(f"\nContent length:")
-    print(f"Mean: {df['content_len'].mean():.0f}")
-    print(f"Median: {df['content_len'].median():.0f}")
-    print(f"Min: {df['content_len'].min()}")
-    print(f"Max: {df['content_len'].max()}")
+    print(f"\nContent length (content_original):")
+    print(f"  Mean   : {df['content_len'].mean():.0f}")
+    print(f"  Median : {df['content_len'].median():.0f}")
+    print(f"  Min    : {df['content_len'].min()}")
+    print(f"  Max    : {df['content_len'].max()}")
 
 
 def main():
@@ -163,7 +163,7 @@ def main():
     print_dataset_stats(df)
 
     df.to_parquet(out_path, index=True)
-    log.info(f"Saved clean articles into {out_path}")
+    log.info(f"Saved clean articles to {out_path}")
 
     return df
 

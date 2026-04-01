@@ -27,3 +27,15 @@ EMBEDDING_MODEL = "all-MiniLM-L6-v2"
 CONTENT_TRUNCATE_CHARS = 512
 
 EMBEDDING_TEXT_FIELD = "title_content"
+
+# Community detection settings (incident clustering)
+# cosine similarity threshold for grouping articles into incidents
+COMMUNITY_DETECTION_THRESHOLD = 0.70
+MIN_COMMUNITY_SIZE = 3                  # minimum articles per incident cluster
+# minimum distinct leanings (left/center/right) per incident
+MIN_BIAS_DIVERSITY = 2
+# cap on articles per leaning class per incident
+MAX_ARTICLES_PER_LEANING = 3
+
+# Output filenames
+INCIDENTS_JSONL = "prepared_incidents.jsonl"

@@ -4,9 +4,14 @@ version = "0.1.0"
 description = "Local Ollama experiment pipeline for source-selection behavior analysis"
 requires-python = ">=3.10,<3.11"
 dependencies = [
+  "fastapi>=0.135.2",
+  "numpy>=2.2.6",
+  "pandas>=2.3.3",
   "pydantic>=2.8.2",
   "pyyaml>=6.0.2",
-  "requests>=2.32.3"
+  "requests>=2.32.3",
+  "uvicorn>=0.42.0",
+  "watchdog>=6.0.0",
 ]
 
 [dependency-groups]

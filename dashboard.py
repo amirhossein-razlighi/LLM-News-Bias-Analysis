@@ -17,6 +17,7 @@ from app.experiment.prompt_builder import build_selection_prompt
 from app.models.ollama_client import OllamaClient
 from app.parsing.response_parser import parse_model_response
 from app.schemas.models import (
+    Article,
     ConditionName,
     ExperimentRequest,
     ModelDecision,
@@ -24,7 +25,7 @@ from app.schemas.models import (
     ParseStatus,
     PreparedIncident,
 )
-from app.utils.io import read_jsonl, write_jsonl
+from app.utils.io import append_jsonl, read_jsonl
 
 DEFAULT_API_BASE = "http://127.0.0.1:8000"
 DEFAULT_OLLAMA_BASE = "http://localhost:11434"
@@ -60,6 +61,8 @@ def run_batch_experiment(
     retries: int,
     ollama_base_url: str,
     shuffle_candidates: bool,
+    progress_bar: Any | None = None,
+    status_slot: Any | None = None,
 ) -> dict[str, Any]:
     run_id = datetime.now(timezone.utc).strftime("run_%Y%m%d_%H%M%S")
 
@@ -68,18 +71,40 @@ def run_batch_experiment(
     manifest = load_manifest(models_manifest_path)
     client = OllamaClient(base_url=ollama_base_url)
 
-    request_records: list[dict[str, Any]] = []
-    decision_records: list[dict[str, Any]] = []
-    raw_records: list[dict[str, Any]] = []
-
+    prepared_runs: list[tuple[PreparedIncident, dict[ConditionName, list[list[Article]]]]] = []
     for incident in incidents:
-        bundles = build_condition_bundles(
-            incident,
-            conditions=conditions,
-            max_combinations=max_combinations,
-            seed=seed,
-            shuffle_candidates=shuffle_candidates,
+        prepared_runs.append(
+            (
+                incident,
+                build_condition_bundles(
+                    incident,
+                    conditions=conditions,
+                    max_combinations=max_combinations,
+                    seed=seed,
+                    shuffle_candidates=shuffle_candidates,
+                ),
+            )
         )
+
+    total_requests = sum(
+        len(manifest.models) * sum(len(condition_bundles) for condition_bundles in bundles.values())
+        for _, bundles in prepared_runs
+    )
+    completed = 0
+    output_dir = Path(output_root) / run_id
+    output_dir.mkdir(parents=True, exist_ok=True)
+    requests_path = output_dir / "experiment_requests.jsonl"
+    decisions_path = output_dir / "model_decisions.jsonl"
+    raw_outputs_path = output_dir / "raw_outputs.jsonl"
+    for path in (requests_path, decisions_path, raw_outputs_path):
+        path.touch()
+
+    request_count = 0
+    decision_count = 0
+
+    for incident, bundles in prepared_runs:
+        if status_slot is not None:
+            status_slot.caption(f"Running {incident.incident_id}")
 
         for model in manifest.models:
             for condition, condition_bundles in bundles.items():
@@ -103,7 +128,8 @@ def run_batch_experiment(
 
                     request_record = request.model_dump(mode="json")
                     request_record["candidate_order"] = [c.article_id for c in candidates]
-                    request_records.append(request_record)
+                    append_jsonl(requests_path, request_record)
+                    request_count += 1
 
                     try:
                         generation = client.generate(
@@ -119,18 +145,17 @@ def run_batch_experiment(
                             allowed_article_ids={c.article_id for c in candidates},
                         )
 
-                        raw_records.append(
-                            {
-                                "request_id": request_id,
-                                "run_id": run_id,
-                                "incident_id": incident.incident_id,
-                                "model_name": model.name,
-                                "condition": condition.value,
-                                "bundle_index": bundle_idx,
-                                "candidate_order": [c.article_id for c in candidates],
-                                "raw_payload": generation.raw_payload,
-                            }
-                        )
+                        raw_record = {
+                            "request_id": request_id,
+                            "run_id": run_id,
+                            "incident_id": incident.incident_id,
+                            "model_name": model.name,
+                            "condition": condition.value,
+                            "bundle_index": bundle_idx,
+                            "candidate_order": [c.article_id for c in candidates],
+                            "raw_payload": generation.raw_payload,
+                        }
+                        append_jsonl(raw_outputs_path, raw_record)
 
                         decision = ModelDecision(
                             request_id=request_id,
@@ -162,28 +187,29 @@ def run_batch_experiment(
                             latency_ms=None,
                         )
 
-                    decision_records.append(decision.model_dump(mode="json"))
-
-    output_dir = Path(output_root) / run_id
-    write_jsonl(output_dir / "experiment_requests.jsonl", request_records)
-    write_jsonl(output_dir / "model_decisions.jsonl", decision_records)
-    write_jsonl(output_dir / "raw_outputs.jsonl", raw_records)
+                    append_jsonl(decisions_path, decision.model_dump(mode="json"))
+                    decision_count += 1
+                    completed += 1
+                    if progress_bar is not None and total_requests:
+                        progress_bar.progress(completed / total_requests, text=f"{completed}/{total_requests} requests")
 
     return {
         "run_id": run_id,
         "incident_count": len(incidents),
-        "request_count": len(request_records),
-        "decision_count": len(decision_records),
+        "request_count": request_count,
+        "decision_count": decision_count,
         "output_dir": str(output_dir),
     }
 
 
 def metrics_cards(metrics: dict[str, Any], total_count: int) -> None:
-    c1, c2, c3, c4 = st.columns(4)
+    c1, c2, c3, c4, c5, c6 = st.columns(6)
     c1.metric("Records", total_count)
-    c2.metric("Center Preference", f"{metrics.get('center_preference_index', 0.0):.3f}")
-    c3.metric("Partisan Skew", f"{metrics.get('partisan_skew_score', 0.0):.3f}")
-    c4.metric("Robustness", f"{metrics.get('content_robustness_score', 0.0):.3f}")
+    c2.metric("Parse Success", f"{metrics.get('parse_success_rate', 0.0):.1%}")
+    c3.metric("Avg Latency", f"{metrics.get('avg_latency_ms', 0.0):.0f} ms")
+    c4.metric("P95 Latency", f"{metrics.get('p95_latency_ms', 0.0):.0f} ms")
+    c5.metric("Center Preference", f"{metrics.get('center_preference_index', 0.0):.3f}")
+    c6.metric("Robustness", f"{metrics.get('content_robustness_score', 0.0):.3f}")
 
 
 def render_distribution_charts(metrics: dict[str, Any]) -> None:
@@ -225,6 +251,77 @@ def render_distribution_charts(metrics: dict[str, Any]) -> None:
         st.plotly_chart(fig, use_container_width=True)
 
 
+def render_condition_metrics(rows: list[dict[str, Any]]) -> None:
+    if not rows:
+        st.info("No condition-level metrics available yet.")
+        return
+
+    condition_df = pd.DataFrame(rows)
+    st.subheader("Condition Metrics")
+    st.dataframe(condition_df, use_container_width=True, hide_index=True)
+
+    heatmap_df = (
+        condition_df[["condition", "left_ratio", "center_ratio", "right_ratio"]]
+        .melt(id_vars="condition", var_name="bucket", value_name="ratio")
+    )
+    heatmap_df["bucket"] = heatmap_df["bucket"].str.replace("_ratio", "", regex=False)
+    heatmap = px.density_heatmap(
+        heatmap_df,
+        x="bucket",
+        y="condition",
+        z="ratio",
+        color_continuous_scale="Blues",
+        text_auto=".0%",
+        title="Selected Leaning by Condition",
+    )
+    st.plotly_chart(heatmap, use_container_width=True)
+
+    latency_fig = px.bar(
+        condition_df,
+        x="condition",
+        y="avg_latency_ms",
+        title="Average Latency by Condition",
+        color="condition",
+    )
+    st.plotly_chart(latency_fig, use_container_width=True)
+
+
+def render_top_outlets(rows: list[dict[str, Any]]) -> None:
+    if not rows:
+        st.info("No outlet selections available yet.")
+        return
+    outlet_df = pd.DataFrame(rows)
+    st.subheader("Top Selected Outlets")
+    fig = px.bar(
+        outlet_df.sort_values("count", ascending=True),
+        x="count",
+        y="selected_outlet",
+        orientation="h",
+        title="Top Selected Outlets",
+        color="count",
+        color_continuous_scale="Viridis",
+    )
+    st.plotly_chart(fig, use_container_width=True)
+
+
+def render_run_summaries(rows: list[dict[str, Any]]) -> None:
+    if not rows:
+        st.info("No run summaries available yet.")
+        return
+    run_df = pd.DataFrame(rows)
+    st.subheader("Run Summaries")
+    st.dataframe(run_df, use_container_width=True, hide_index=True)
+
+
+def render_sample_records(rows: list[dict[str, Any]]) -> None:
+    if not rows:
+        st.info("No records available for inspection.")
+        return
+    records_df = pd.DataFrame(rows)
+    st.subheader("Recent Records")
+    st.dataframe(records_df, use_container_width=True, hide_index=True)
+
+
 def render_inter_model(inter_model_data: dict[str, Any]) -> None:
     if not inter_model_data:
         st.info("No inter-model data available yet.")
@@ -240,12 +337,14 @@ def render_inter_model(inter_model_data: dict[str, Any]) -> None:
                 "selection_stability_score": metrics.get("selection_stability_score", 0.0),
                 "identity_dominance_rate": metrics.get("identity_dominance_rate", 0.0),
                 "content_robustness_score": metrics.get("content_robustness_score", 0.0),
+                "parse_success_rate": metrics.get("parse_success_rate", 0.0),
+                "avg_latency_ms": metrics.get("avg_latency_ms", 0.0),
             }
         )
 
     inter_df = pd.DataFrame(rows).sort_values("model")
     st.subheader("Inter-Model Metrics")
-    st.dataframe(inter_df, use_container_width=True)
+    st.dataframe(inter_df, use_container_width=True, hide_index=True)
 
     fig1 = px.bar(
         inter_df,
@@ -265,6 +364,15 @@ def render_inter_model(inter_model_data: dict[str, Any]) -> None:
     )
     st.plotly_chart(fig2, use_container_width=True)
 
+    fig3 = px.bar(
+        inter_df,
+        x="model",
+        y="avg_latency_ms",
+        title="Average Latency by Model",
+        color="model",
+    )
+    st.plotly_chart(fig3, use_container_width=True)
+
 
 st.set_page_config(page_title="Sourcerers Dashboard", layout="wide")
 st.title("Sourcerers Analytics Dashboard")
@@ -274,6 +382,7 @@ with st.sidebar:
     api_base = st.text_input("API Base URL", value=DEFAULT_API_BASE).rstrip("/")
     ollama_base = st.text_input("Ollama Base URL", value=DEFAULT_OLLAMA_BASE).rstrip("/")
     model_filter = st.text_input("Model filter (optional)", value="")
+    selected_run = st.text_input("Run filter (optional)", value="")
 
     st.divider()
     st.subheader("Bulk Ingest")
@@ -317,7 +426,12 @@ with analytics_tab:
     st.subheader("Summary")
 
     try:
-        summary_params = {"model": model_filter} if model_filter else None
+        summary_params = {}
+        if model_filter:
+            summary_params["model"] = model_filter
+        if selected_run:
+            summary_params["run_id"] = selected_run
+        summary_params = summary_params or None
         summary = fetch_json(f"{api_base}/metrics/summary", params=summary_params)
         metrics = summary.get("metrics", {})
         count = int(summary.get("count", 0))
@@ -332,20 +446,63 @@ with analytics_tab:
         runs_payload = fetch_json(f"{api_base}/metrics/runs")
         runs = runs_payload.get("runs", [])
         if runs:
-            st.write("Available runs:", runs)
+            st.code("\n".join(runs))
         else:
             st.info("No run IDs found in analytics database yet.")
     except Exception as exc:
         st.error(f"Could not load run list: {exc}")
 
     try:
-        inter_model = fetch_json(f"{api_base}/metrics/inter-model")
+        inter_model_params = {"run_id": selected_run} if selected_run else None
+        inter_model = fetch_json(f"{api_base}/metrics/inter-model", params=inter_model_params)
         if isinstance(inter_model, dict) and "error" not in inter_model:
             render_inter_model(inter_model)
         else:
             st.info("Inter-model metrics are not available yet.")
     except Exception as exc:
         st.error(f"Could not load inter-model metrics: {exc}")
+
+    try:
+        condition_params = {}
+        if model_filter:
+            condition_params["model"] = model_filter
+        if selected_run:
+            condition_params["run_id"] = selected_run
+        condition_rows = fetch_json(f"{api_base}/metrics/conditions", params=condition_params or None).get("rows", [])
+        render_condition_metrics(condition_rows)
+    except Exception as exc:
+        st.error(f"Could not load condition metrics: {exc}")
+
+    col1, col2 = st.columns(2)
+    with col1:
+        try:
+            outlet_params = {}
+            if model_filter:
+                outlet_params["model"] = model_filter
+            if selected_run:
+                outlet_params["run_id"] = selected_run
+            top_outlets = fetch_json(f"{api_base}/metrics/top-outlets", params=outlet_params or None).get("rows", [])
+            render_top_outlets(top_outlets)
+        except Exception as exc:
+            st.error(f"Could not load outlet metrics: {exc}")
+    with col2:
+        try:
+            run_params = {"model": model_filter} if model_filter else None
+            run_rows = fetch_json(f"{api_base}/metrics/run-summaries", params=run_params).get("rows", [])
+            render_run_summaries(run_rows)
+        except Exception as exc:
+            st.error(f"Could not load run summaries: {exc}")
+
+    try:
+        record_params = {"limit": 50}
+        if model_filter:
+            record_params["model"] = model_filter
+        if selected_run:
+            record_params["run_id"] = selected_run
+        records = fetch_json(f"{api_base}/metrics/records", params=record_params).get("rows", [])
+        render_sample_records(records)
+    except Exception as exc:
+        st.error(f"Could not load record samples: {exc}")
 
 with runner_tab:
     probe_tab, batch_tab = st.tabs(["Probe Model", "Batch Experiment"])
@@ -380,8 +537,8 @@ with runner_tab:
 
     with batch_tab:
         st.write("Run the full experiment pipeline using existing builders, parser, and schemas.")
-        input_path = st.text_input("Input incidents JSONL", value="data/mock_incidents.jsonl")
-        manifest_path = st.text_input("Models manifest YAML", value="config/models.example.yaml")
+        input_path = st.text_input("Input incidents JSONL", value="data/real_incidents_random_train.jsonl")
+        manifest_path = st.text_input("Models manifest YAML", value="configs/models.example.yaml")
         output_root = st.text_input("Output root", value="outputs")
 
         condition_values = st.multiselect(
@@ -400,6 +557,8 @@ with runner_tab:
                 st.warning("Select at least one condition.")
             else:
                 try:
+                    progress_bar = st.progress(0.0, text="Starting run")
+                    status_slot = st.empty()
                     with st.spinner("Running experiment. This can take a while..."):
                         summary = run_batch_experiment(
                             input_path=input_path,
@@ -411,7 +570,11 @@ with runner_tab:
                             retries=int(retries),
                             ollama_base_url=ollama_base,
                             shuffle_candidates=shuffle_candidates,
+                            progress_bar=progress_bar,
+                            status_slot=status_slot,
                         )
+                    progress_bar.progress(1.0, text="Completed")
+                    status_slot.caption(f"Run finished: {summary['run_id']}")
                     st.success("Batch run completed")
                     st.json(summary)
 

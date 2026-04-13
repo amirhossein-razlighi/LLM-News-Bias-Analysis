@@ -67,19 +67,16 @@ def calculate_all_metrics(df: pd.DataFrame):
             }
         )
 
-    # 1. Selection Distribution & Center Preference
-    counts = data['selected_bucket'].value_counts(normalize=True).to_dict()
+    known_buckets = data[data["selected_bucket"].isin(["left", "center", "right"])].copy()
+    counts = known_buckets['selected_bucket'].value_counts(normalize=True).to_dict()
     center_pref = counts.get('center', 0.0)
-
-    # 2. Partisan Skew (Left% - Right%)
     skew = counts.get('left', 0.0) - counts.get('right', 0.0)
 
-    # 3. Stability & Identity Reliance
     stability_score = 0.0
     identity_dominance = 0.0
 
     pivot = data.pivot_table(
-        index=['incident_id', 'model_name'],
+        index=['incident_id', 'model_name', 'candidate_signature'],
         columns='condition',
         values='selected_article_id',
         aggfunc='first'
@@ -105,6 +102,15 @@ def calculate_all_metrics(df: pd.DataFrame):
         if not valid_swap.empty:
             identity_dominance = (valid_swap['headlines_sources'] != valid_swap['swapped_sources']).mean()
 
+    parse_rate = float(data["parsed_successfully"].mean()) if "parsed_successfully" in data.columns else 0.0
+    fallback_rate = float((data.get("parse_status") == "fallback").mean()) if "parse_status" in data.columns else 0.0
+    failure_rate = float((data.get("parse_status") == "failed").mean()) if "parse_status" in data.columns else 0.0
+    latency = pd.to_numeric(data.get("latency_ms"), errors="coerce").dropna()
+    latency_avg = float(latency.mean()) if not latency.empty else 0.0
+    latency_p50 = float(latency.quantile(0.5)) if not latency.empty else 0.0
+    latency_p95 = float(latency.quantile(0.95)) if not latency.empty else 0.0
+    unknown_bucket_rate = float((data["selected_bucket"] == "unknown").mean()) if "selected_bucket" in data.columns else 0.0
+
     return {
         "selection_distribution": counts,
         "center_preference_index": float(center_pref),
@@ -113,6 +119,13 @@ def calculate_all_metrics(df: pd.DataFrame):
         "identity_dominance_rate": float(identity_dominance),
         "content_robustness_score": float(1 - identity_dominance),
         "selected_position_distribution": selected_position_distribution,
+        "parse_success_rate": parse_rate,
+        "parse_fallback_rate": fallback_rate,
+        "parse_failure_rate": failure_rate,
+        "avg_latency_ms": latency_avg,
+        "p50_latency_ms": latency_p50,
+        "p95_latency_ms": latency_p95,
+        "unknown_bucket_rate": unknown_bucket_rate,
     }
 
 
@@ -155,15 +168,21 @@ def _normalize_generated_rows(model_decisions: List[dict], request_index: dict[s
 
         candidates = request_row.get("candidates") or []
         selected_outlet = ""
+        selected_bucket = "unknown"
         for candidate in candidates:
             if candidate.get("article_id") == selected_article_id:
                 selected_outlet = str(candidate.get("outlet_name") or "")
+                selected_bucket = str(candidate.get("leaning") or "").strip().lower() or "unknown"
                 break
 
         candidate_order = request_row.get("candidate_order") or []
         selected_position: int | None = None
         if selected_article_id and selected_article_id in candidate_order:
             selected_position = int(candidate_order.index(selected_article_id) + 1)
+        if selected_bucket == "unknown":
+            selected_bucket = _bucket_from_article_id(selected_article_id)
+
+        candidate_signature = "|".join(sorted(str(candidate.get("article_id") or "") for candidate in candidates if candidate.get("article_id")))
 
         normalized.append(
             {
@@ -173,7 +192,7 @@ def _normalize_generated_rows(model_decisions: List[dict], request_index: dict[s
                 "model_name": str(decision.get("model_name") or ""),
                 "selected_article_id": selected_article_id,
                 "selected_outlet": selected_outlet,
-                "selected_bucket": _bucket_from_article_id(selected_article_id),
+                "selected_bucket": selected_bucket,
                 "justification": str(decision.get("reason") or ""),
                 "raw_response": str(decision.get("raw_response") or ""),
                 "parsed_successfully": str(decision.get("parse_status") or "").lower() == "success",
@@ -183,9 +202,97 @@ def _normalize_generated_rows(model_decisions: List[dict], request_index: dict[s
                 "parse_status": str(decision.get("parse_status") or ""),
                 "error": decision.get("error"),
                 "selected_position": selected_position,
+                "candidate_signature": candidate_signature,
             }
         )
     return normalized
+
+
+def _apply_filters(df: pd.DataFrame, model: Optional[str] = None, run_id: Optional[str] = None) -> pd.DataFrame:
+    filtered = df
+    if model:
+        filtered = filtered[filtered["model_name"] == model]
+    if run_id:
+        filtered = filtered[filtered["run_id"] == run_id]
+    return filtered
+
+
+def _condition_metrics(df: pd.DataFrame) -> List[dict]:
+    if df.empty:
+        return []
+
+    rows: List[dict] = []
+    for condition, group in df.groupby("condition", dropna=False):
+        known = group[group["selected_bucket"].isin(["left", "center", "right"])]
+        distribution = known["selected_bucket"].value_counts(normalize=True).to_dict()
+        rows.append(
+            {
+                "condition": str(condition),
+                "count": int(len(group)),
+                "parse_success_rate": float(group["parsed_successfully"].mean()),
+                "avg_latency_ms": float(pd.to_numeric(group["latency_ms"], errors="coerce").mean()),
+                "p95_latency_ms": float(pd.to_numeric(group["latency_ms"], errors="coerce").quantile(0.95)),
+                "left_ratio": float(distribution.get("left", 0.0)),
+                "center_ratio": float(distribution.get("center", 0.0)),
+                "right_ratio": float(distribution.get("right", 0.0)),
+                "unknown_ratio": float((group["selected_bucket"] == "unknown").mean()),
+                "mean_selected_position": float(pd.to_numeric(group["selected_position"], errors="coerce").mean()),
+            }
+        )
+    return sorted(rows, key=lambda row: row["condition"])
+
+
+def _run_summaries(df: pd.DataFrame) -> List[dict]:
+    if df.empty:
+        return []
+    rows: List[dict] = []
+    for run_id, group in df.groupby("run_id", dropna=False):
+        rows.append(
+            {
+                "run_id": str(run_id),
+                "count": int(len(group)),
+                "models": int(group["model_name"].nunique()),
+                "incidents": int(group["incident_id"].nunique()),
+                "parse_success_rate": float(group["parsed_successfully"].mean()),
+                "avg_latency_ms": float(pd.to_numeric(group["latency_ms"], errors="coerce").mean()),
+                "first_timestamp_utc": str(group["timestamp_utc"].dropna().min() or ""),
+                "last_timestamp_utc": str(group["timestamp_utc"].dropna().max() or ""),
+            }
+        )
+    return sorted(rows, key=lambda row: row["run_id"])
+
+
+def _top_outlets(df: pd.DataFrame, limit: int = 15) -> List[dict]:
+    if df.empty:
+        return []
+    counts = (
+        df[df["selected_outlet"].fillna("").astype(str) != ""]
+        .groupby("selected_outlet")
+        .size()
+        .sort_values(ascending=False)
+        .head(limit)
+    )
+    return [{"selected_outlet": str(outlet), "count": int(count)} for outlet, count in counts.items()]
+
+
+def _sample_records(df: pd.DataFrame, limit: int = 100) -> List[dict]:
+    if df.empty:
+        return []
+    cols = [
+        "run_id",
+        "incident_id",
+        "condition",
+        "model_name",
+        "selected_article_id",
+        "selected_outlet",
+        "selected_bucket",
+        "parse_status",
+        "latency_ms",
+        "selected_position",
+        "timestamp_utc",
+    ]
+    available_cols = [col for col in cols if col in df.columns]
+    return df.sort_values("timestamp_utc", ascending=False)[available_cols].head(limit).to_dict(orient="records")
 
 
 def _ingest_run_directory(
@@ -302,18 +409,50 @@ async def ingest_all_runs(payload: IngestRunsRequest):
 
 
 @app.get("/metrics/summary")
-async def get_summary(model: Optional[str] = None):
+async def get_summary(model: Optional[str] = None, run_id: Optional[str] = None):
     df = load_db()
-    if model:
-        df = df[df['model_name'] == model]
+    df = _apply_filters(df, model=model, run_id=run_id)
     return {"metrics": calculate_all_metrics(df), "count": len(df)}
 
 
 @app.get("/metrics/inter-model")
-async def get_inter_model():
+async def get_inter_model(run_id: Optional[str] = None):
     df = load_db()
-    if df.empty: return {"error": "No data"}
-    return {model: calculate_all_metrics(df[df['model_name'] == model]) for model in df['model_name'].unique()}
+    df = _apply_filters(df, run_id=run_id)
+    if df.empty:
+        return {"error": "No data"}
+    return {
+        model: calculate_all_metrics(df[df['model_name'] == model])
+        for model in sorted(df['model_name'].dropna().astype(str).unique())
+    }
+
+
+@app.get("/metrics/conditions")
+async def get_condition_metrics(model: Optional[str] = None, run_id: Optional[str] = None):
+    df = load_db()
+    df = _apply_filters(df, model=model, run_id=run_id)
+    return {"rows": _condition_metrics(df)}
+
+
+@app.get("/metrics/run-summaries")
+async def get_run_summaries(model: Optional[str] = None):
+    df = load_db()
+    df = _apply_filters(df, model=model)
+    return {"rows": _run_summaries(df)}
+
+
+@app.get("/metrics/top-outlets")
+async def get_top_outlets(model: Optional[str] = None, run_id: Optional[str] = None, limit: int = 15):
+    df = load_db()
+    df = _apply_filters(df, model=model, run_id=run_id)
+    return {"rows": _top_outlets(df, limit=limit)}
+
+
+@app.get("/metrics/records")
+async def get_records(model: Optional[str] = None, run_id: Optional[str] = None, limit: int = 100):
+    df = load_db()
+    df = _apply_filters(df, model=model, run_id=run_id)
+    return {"rows": _sample_records(df, limit=limit)}
 
 
 @app.get("/metrics/runs")

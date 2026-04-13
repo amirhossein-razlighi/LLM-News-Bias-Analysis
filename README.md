@@ -62,14 +62,26 @@ uv run python -m app.cli.probe_model \
 Run a full experiment:
 
 ```bash
+uv run python -m app.cli.prepare_real_incidents \
+	--json-dir data/jsons \
+	--split-file data/splits/random/train.tsv \
+	--output data/real_incidents_random_train.jsonl \
+	--min-per-leaning 3 \
+	--max-articles-per-leaning 8
+
 uv run python -m app.cli.run_experiments \
-	--input data/mock_incidents.jsonl \
-	--models-manifest config/models.example.yaml \
+	--input data/real_incidents_random_train.jsonl \
+	--models-manifest configs/models.example.yaml \
 	--output-dir outputs \
 	--conditions headlines_only headlines_with_sources sources_only headlines_with_manipulated_sources \
 	--max-combinations 3 \
 	--seed 42
 ```
+
+Notes for real data:
+- `app.cli.prepare_real_incidents` groups `data/jsons/*.json` by topic and keeps topics that have left/center/right coverage.
+- Use `data/splits/random/*.tsv` or `data/splits/media/*.tsv` with `--split-file` if you want to stay inside one dataset split.
+- `--max-articles-per-leaning` keeps each incident bounded so the runner does not build an enormous search space for large topics like `elections`.
 
 Candidate order randomization:
 - Enabled by default for position-bias control.

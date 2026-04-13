@@ -2,11 +2,31 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from uuid import uuid4
 
 import yaml
+
+TQDM_AVAILABLE = True
+
+try:
+    from tqdm import tqdm
+except ImportError:  # pragma: no cover - fallback for minimal installs
+    TQDM_AVAILABLE = False
+
+    class _NullProgress:
+        def update(self, _: int) -> None:
+            return None
+
+        def close(self) -> None:
+            return None
+
+    def tqdm(iterable=None, total=None, **_: object):
+        if iterable is not None:
+            return iterable
+        return _NullProgress()
 
 from app.experiment.condition_builder import build_condition_bundles
 from app.experiment.prompt_builder import build_selection_prompt
@@ -20,7 +40,7 @@ from app.schemas.models import (
     ParseStatus,
     PreparedIncident,
 )
-from app.utils.io import read_jsonl, write_jsonl
+from app.utils.io import append_jsonl, read_jsonl
 
 
 def parse_args() -> argparse.Namespace:
@@ -57,9 +77,36 @@ def _load_manifest(path: str) -> ModelManifest:
     return ModelManifest.model_validate(payload)
 
 
+def _prepare_bundles(
+    incidents: list[PreparedIncident],
+    conditions: list[ConditionName],
+    max_combinations: int,
+    seed: int,
+    shuffle_candidates: bool,
+) -> list[tuple[PreparedIncident, dict[ConditionName, list[list]]]]:
+    prepared: list[tuple[PreparedIncident, dict[ConditionName, list[list]]]] = []
+    for incident in incidents:
+        bundles = build_condition_bundles(
+            incident,
+            conditions=conditions,
+            max_combinations=max_combinations,
+            seed=seed,
+            shuffle_candidates=shuffle_candidates,
+        )
+        prepared.append((incident, bundles))
+    return prepared
+
+
 def main() -> None:
     args = parse_args()
     run_id = datetime.now(timezone.utc).strftime("run_%Y%m%d_%H%M%S")
+
+    if not TQDM_AVAILABLE:
+        print(
+            "Warning: tqdm is not installed, so no progress bar will be shown. "
+            "Run `uv sync` to install project dependencies.",
+            file=sys.stderr,
+        )
 
     incidents = [PreparedIncident.model_validate(row) for row in read_jsonl(args.input)]
     conditions = _load_conditions(args.conditions)
@@ -67,19 +114,32 @@ def main() -> None:
 
     client = OllamaClient(base_url=args.base_url)
 
-    request_records: list[dict] = []
-    decision_records: list[dict] = []
-    raw_records: list[dict] = []
+    prepared_runs = _prepare_bundles(
+        incidents,
+        conditions=conditions,
+        max_combinations=args.max_combinations,
+        seed=args.seed,
+        shuffle_candidates=args.shuffle_candidates,
+    )
+    total_requests = sum(
+        len(manifest.models) * sum(len(condition_bundles) for condition_bundles in bundles.values())
+        for _, bundles in prepared_runs
+    )
 
-    for incident in incidents:
-        bundles = build_condition_bundles(
-            incident,
-            conditions=conditions,
-            max_combinations=args.max_combinations,
-            seed=args.seed,
-            shuffle_candidates=args.shuffle_candidates,
-        )
+    output_dir = Path(args.output_dir) / run_id
+    output_dir.mkdir(parents=True, exist_ok=True)
+    requests_path = output_dir / "experiment_requests.jsonl"
+    decisions_path = output_dir / "model_decisions.jsonl"
+    raw_outputs_path = output_dir / "raw_outputs.jsonl"
+    for path in (requests_path, decisions_path, raw_outputs_path):
+        path.touch()
 
+    request_count = 0
+    decision_count = 0
+
+    progress = tqdm(total=total_requests, desc="Running experiments", unit="request")
+
+    for incident, bundles in prepared_runs:
         for model in manifest.models:
             for condition, condition_bundles in bundles.items():
                 for bundle_idx, candidates in enumerate(condition_bundles, start=1):
@@ -101,7 +161,8 @@ def main() -> None:
                     )
                     request_record = request.model_dump(mode="json")
                     request_record["candidate_order"] = [c.article_id for c in candidates]
-                    request_records.append(request_record)
+                    append_jsonl(requests_path, request_record)
+                    request_count += 1
 
                     try:
                         generation = client.generate(
@@ -117,18 +178,17 @@ def main() -> None:
                             allowed_article_ids={c.article_id for c in candidates},
                         )
 
-                        raw_records.append(
-                            {
-                                "request_id": request_id,
-                                "run_id": run_id,
-                                "incident_id": incident.incident_id,
-                                "model_name": model.name,
-                                "condition": condition.value,
-                                "bundle_index": bundle_idx,
-                                "candidate_order": [c.article_id for c in candidates],
-                                "raw_payload": generation.raw_payload,
-                            }
-                        )
+                        raw_record = {
+                            "request_id": request_id,
+                            "run_id": run_id,
+                            "incident_id": incident.incident_id,
+                            "model_name": model.name,
+                            "condition": condition.value,
+                            "bundle_index": bundle_idx,
+                            "candidate_order": [c.article_id for c in candidates],
+                            "raw_payload": generation.raw_payload,
+                        }
+                        append_jsonl(raw_outputs_path, raw_record)
 
                         decision = ModelDecision(
                             request_id=request_id,
@@ -160,18 +220,17 @@ def main() -> None:
                             latency_ms=None,
                         )
 
-                    decision_records.append(decision.model_dump(mode="json"))
+                    append_jsonl(decisions_path, decision.model_dump(mode="json"))
+                    decision_count += 1
+                    progress.update(1)
 
-    output_dir = Path(args.output_dir) / run_id
-    write_jsonl(output_dir / "experiment_requests.jsonl", request_records)
-    write_jsonl(output_dir / "model_decisions.jsonl", decision_records)
-    write_jsonl(output_dir / "raw_outputs.jsonl", raw_records)
+    progress.close()
 
     summary = {
         "run_id": run_id,
         "incident_count": len(incidents),
-        "request_count": len(request_records),
-        "decision_count": len(decision_records),
+        "request_count": request_count,
+        "decision_count": decision_count,
         "output_dir": str(output_dir),
     }
     print(json.dumps(summary, indent=2))

@@ -13,7 +13,12 @@ from pathlib import Path
 from typing import Optional
 
 import pandas as pd
-from tqdm import tqdm
+
+try:
+    from tqdm import tqdm
+except ImportError:  # pragma: no cover - fallback for minimal project installs
+    def tqdm(iterable, **_: object):
+        return iterable
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 

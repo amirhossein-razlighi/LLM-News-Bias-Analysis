@@ -26,13 +26,32 @@ def _sample_triplets(
     if not left or not center or not right:
         return []
 
-    all_triplets = list(itertools.product(left, center, right))
-    if len(all_triplets) <= max_combinations:
-        return all_triplets
+    total_triplets = len(left) * len(center) * len(right)
+    if total_triplets <= max_combinations:
+        return list(itertools.product(left, center, right))
 
     rng = random.Random(seed)
-    rng.shuffle(all_triplets)
-    return all_triplets[:max_combinations]
+    sampled_keys: set[tuple[int, int, int]] = set()
+    sampled_triplets: list[tuple] = []
+
+    while len(sampled_triplets) < max_combinations:
+        triplet_key = (
+            rng.randrange(len(left)),
+            rng.randrange(len(center)),
+            rng.randrange(len(right)),
+        )
+        if triplet_key in sampled_keys:
+            continue
+        sampled_keys.add(triplet_key)
+        sampled_triplets.append(
+            (
+                left[triplet_key[0]],
+                center[triplet_key[1]],
+                right[triplet_key[2]],
+            )
+        )
+
+    return sampled_triplets
 
 
 def _presented_articles_for_condition(
@@ -44,7 +63,7 @@ def _presented_articles_for_condition(
 
     if condition == ConditionName.HEADLINES_ONLY:
         return [
-            PresentedArticle(article_id=a.article_id, headline=a.headline)
+            PresentedArticle(article_id=a.article_id, headline=a.headline, leaning=a.leaning)
             for a in selected
         ]
 
@@ -54,13 +73,14 @@ def _presented_articles_for_condition(
                 article_id=a.article_id,
                 headline=a.headline,
                 outlet_name=a.outlet_name,
+                leaning=a.leaning,
             )
             for a in selected
         ]
 
     if condition == ConditionName.SOURCES_ONLY:
         return [
-            PresentedArticle(article_id=a.article_id, outlet_name=a.outlet_name)
+            PresentedArticle(article_id=a.article_id, outlet_name=a.outlet_name, leaning=a.leaning)
             for a in selected
         ]
 
@@ -71,6 +91,7 @@ def _presented_articles_for_condition(
                 article_id=a.article_id,
                 headline=a.headline,
                 outlet_name=rotated_outlets[idx],
+                leaning=a.leaning,
             )
             for idx, a in enumerate(selected)
         ]

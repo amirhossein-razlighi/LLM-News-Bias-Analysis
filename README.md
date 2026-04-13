@@ -2,6 +2,108 @@
 
 Local source-selection experiment pipeline with Ollama, analytics API, and Streamlit dashboard.
 
+## Run And See Results
+
+If you want the fastest path from setup to visible results, do this.
+
+### 1) Install dependencies
+
+```bash
+uv venv --python 3.10
+uv sync
+uv add streamlit plotly
+```
+
+### 2) Pull the Ollama models you want to compare
+
+Example:
+
+```bash
+ollama pull qwen2.5:7b
+ollama pull qwen3:8b
+ollama pull gemma3:4b
+```
+
+If you are using the current default manifest, also make sure every model in [configs/models.example.yaml](/Users/amirhossein/Documents/University/NLP/NLP_Project/configs/models.example.yaml) is pulled locally.
+
+### 3) Start Ollama
+
+In terminal 1:
+
+```bash
+ollama serve
+```
+
+### 4) Start the analytics API
+
+In terminal 2:
+
+```bash
+uv run uvicorn app.api.engine_analytics:app --host 0.0.0.0 --port 8000 --reload
+```
+
+### 5) Start the Streamlit dashboard
+
+In terminal 3:
+
+```bash
+uv run streamlit run dashboard.py
+```
+
+Then open:
+- http://localhost:8501
+
+### 6) Prepare real data
+
+In terminal 4:
+
+```bash
+uv run python -m app.cli.prepare_real_incidents \
+  --json-dir data/jsons \
+  --split-file data/splits/random/valid.tsv \
+  --output data/real_incidents_random_valid.jsonl \
+  --min-per-leaning 3 \
+  --max-articles-per-leaning 8
+```
+
+### 7) Run the experiment
+
+```bash
+uv run python -m app.cli.run_experiments \
+  --input data/real_incidents_random_valid.jsonl \
+  --models-manifest configs/models.example.yaml \
+  --output-dir outputs \
+  --conditions headlines_only headlines_with_sources sources_only headlines_with_manipulated_sources \
+  --max-combinations 3 \
+  --seed 42
+```
+
+This creates a new folder like:
+
+```text
+outputs/run_YYYYMMDD_HHMMSS/
+```
+
+with:
+- `experiment_requests.jsonl`
+- `model_decisions.jsonl`
+- `raw_outputs.jsonl`
+
+### 8) Ingest the run and view the results
+
+Use either option:
+
+- In the Streamlit sidebar, click `Ingest all runs in outputs`
+- Or call the API directly:
+
+```bash
+curl -X POST http://127.0.0.1:8000/ingest/runs \
+  -H "Content-Type: application/json" \
+  -d '{"outputs_dir":"outputs"}'
+```
+
+Then go to the `Analytics` tab in Streamlit to compare models, conditions, latency, parse success, outlet preferences, and leaning-selection behavior.
+
 ## Setup
 
 ### 1) Install uv (if needed)
@@ -42,12 +144,22 @@ Pull models you plan to use (example):
 ```bash
 ollama pull qwen2.5:7b
 ```
+Pull all the models inside `configs/models.example.yaml` if you want to use the current default manifest.
 
 List local models:
 
 ```bash
 uv run python -m app.cli.list_models
 ```
+
+## Fast End-to-End Path
+
+1. Start Ollama: `ollama serve`
+2. Start API: `uv run uvicorn app.api.engine_analytics:app --host 0.0.0.0 --port 8000 --reload`
+3. Start dashboard: `uv run streamlit run dashboard.py`
+4. In dashboard sidebar, click **Ingest all runs in outputs**
+5. View charts in **Analytics** tab
+6. Run new jobs in **Run Models** tab
 
 ## CLI Workflow
 
@@ -173,15 +285,6 @@ Open in browser:
 - **Sidebar ingest tools**
 	- Bulk ingest all runs from `outputs` (default first-try path).
 	- Single-run ingest by explicit run directory.
-
-## Fast End-to-End Path
-
-1. Start Ollama: `ollama serve`
-2. Start API: `uv run uvicorn app.api.engine_analytics:app --host 0.0.0.0 --port 8000 --reload`
-3. Start dashboard: `uv run streamlit run dashboard.py`
-4. In dashboard sidebar, click **Ingest all runs in outputs**
-5. View charts in **Analytics** tab
-6. Run new jobs in **Run Models** tab
 
 ## Data Contracts
 

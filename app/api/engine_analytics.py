@@ -308,6 +308,33 @@ def _condition_metrics(df: pd.DataFrame) -> List[dict]:
     return sorted(rows, key=lambda row: row["condition"])
 
 
+def _condition_metrics_by_model(df: pd.DataFrame) -> List[dict]:
+    if df.empty:
+        return []
+
+    df = _ensure_analytics_columns(df)
+    rows: List[dict] = []
+    for (model_name, condition), group in df.groupby(["model_name", "condition"], dropna=False):
+        known = group[group["selected_bucket"].isin(["left", "center", "right"])]
+        distribution = known["selected_bucket"].value_counts(normalize=True).to_dict()
+        rows.append(
+            {
+                "model": str(model_name),
+                "condition": str(condition),
+                "count": int(len(group)),
+                "parse_success_rate": _safe_float(group["parsed_successfully"].mean()),
+                "avg_latency_ms": _safe_float(pd.to_numeric(group["latency_ms"], errors="coerce").mean()),
+                "p95_latency_ms": _safe_float(pd.to_numeric(group["latency_ms"], errors="coerce").quantile(0.95)),
+                "left_ratio": _safe_float(distribution.get("left", 0.0)),
+                "center_ratio": _safe_float(distribution.get("center", 0.0)),
+                "right_ratio": _safe_float(distribution.get("right", 0.0)),
+                "unknown_ratio": _safe_float((group["selected_bucket"] == "unknown").mean()),
+                "mean_selected_position": _safe_float(pd.to_numeric(group["selected_position"], errors="coerce").mean()),
+            }
+        )
+    return sorted(rows, key=lambda row: (row["condition"], row["model"]))
+
+
 def _run_summaries(df: pd.DataFrame) -> List[dict]:
     if df.empty:
         return []
@@ -341,6 +368,28 @@ def _top_outlets(df: pd.DataFrame, limit: int = 15) -> List[dict]:
         .head(limit)
     )
     return [{"selected_outlet": str(outlet), "count": int(count)} for outlet, count in counts.items()]
+
+
+def _top_outlets_by_model(df: pd.DataFrame, limit: int = 10) -> List[dict]:
+    if df.empty:
+        return []
+    df = _ensure_analytics_columns(df)
+    df = df[df["selected_outlet"].fillna("").astype(str) != ""]
+    if df.empty:
+        return []
+
+    rows: List[dict] = []
+    for model_name, group in df.groupby("model_name", dropna=False):
+        counts = group.groupby("selected_outlet").size().sort_values(ascending=False).head(limit)
+        for outlet, count in counts.items():
+            rows.append(
+                {
+                    "model": str(model_name),
+                    "selected_outlet": str(outlet),
+                    "count": int(count),
+                }
+            )
+    return sorted(rows, key=lambda row: (row["model"], -row["count"], row["selected_outlet"]))
 
 
 def _sample_records(df: pd.DataFrame, limit: int = 100) -> List[dict]:
@@ -504,6 +553,13 @@ async def get_condition_metrics(model: Optional[str] = None, run_id: Optional[st
     return {"rows": _condition_metrics(df)}
 
 
+@app.get("/metrics/conditions-by-model")
+async def get_condition_metrics_by_model(run_id: Optional[str] = None):
+    df = load_db()
+    df = _apply_filters(df, run_id=run_id)
+    return {"rows": _condition_metrics_by_model(df)}
+
+
 @app.get("/metrics/run-summaries")
 async def get_run_summaries(model: Optional[str] = None):
     df = load_db()
@@ -516,6 +572,13 @@ async def get_top_outlets(model: Optional[str] = None, run_id: Optional[str] = N
     df = load_db()
     df = _apply_filters(df, model=model, run_id=run_id)
     return {"rows": _top_outlets(df, limit=limit)}
+
+
+@app.get("/metrics/top-outlets-by-model")
+async def get_top_outlets_by_model(run_id: Optional[str] = None, limit: int = 10):
+    df = load_db()
+    df = _apply_filters(df, run_id=run_id)
+    return {"rows": _top_outlets_by_model(df, limit=limit)}
 
 
 @app.get("/metrics/records")

@@ -31,6 +31,11 @@ DEFAULT_API_BASE = "http://127.0.0.1:8000"
 DEFAULT_OLLAMA_BASE = "http://localhost:11434"
 
 
+def render_filter_scope(selected_run: str, *, label: str = "Scope") -> None:
+    run_text = selected_run if selected_run else "All runs"
+    st.caption(f"{label}: cross-model comparison | run = {run_text}")
+
+
 @st.cache_data(ttl=5)
 def fetch_json(url: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
     response = requests.get(url, params=params, timeout=20)
@@ -102,11 +107,12 @@ def run_batch_experiment(
     request_count = 0
     decision_count = 0
 
-    for incident, bundles in prepared_runs:
+    for model in manifest.models:
         if status_slot is not None:
-            status_slot.caption(f"Running {incident.incident_id}")
-
-        for model in manifest.models:
+            status_slot.caption(f"Running model {model.name}")
+        for incident, bundles in prepared_runs:
+            if status_slot is not None:
+                status_slot.caption(f"Running model {model.name} on {incident.incident_id}")
             for condition, condition_bundles in bundles.items():
                 for bundle_idx, candidates in enumerate(condition_bundles, start=1):
                     request_id = str(uuid4())
@@ -139,6 +145,7 @@ def run_batch_experiment(
                             max_tokens=model.max_tokens,
                             timeout_seconds=model.timeout_seconds,
                             retries=retries,
+                            think=model.think,
                         )
                         parsed = parse_model_response(
                             text=generation.text,
@@ -251,39 +258,247 @@ def render_distribution_charts(metrics: dict[str, Any]) -> None:
         st.plotly_chart(fig, use_container_width=True)
 
 
-def render_condition_metrics(rows: list[dict[str, Any]]) -> None:
-    if not rows:
-        st.info("No condition-level metrics available yet.")
+def render_inter_model_overview(inter_model_data: dict[str, Any]) -> None:
+    if not inter_model_data:
+        st.info("No inter-model data available yet.")
         return
 
-    condition_df = pd.DataFrame(rows)
-    st.subheader("Condition Metrics")
-    st.dataframe(condition_df, use_container_width=True, hide_index=True)
+    rows: list[dict[str, Any]] = []
+    for model_name, metrics in inter_model_data.items():
+        rows.append(
+            {
+                "model": model_name,
+                "records": metrics.get("record_count", 0),
+                "parse_success_rate": metrics.get("parse_success_rate", 0.0),
+                "avg_latency_ms": metrics.get("avg_latency_ms", 0.0),
+                "p95_latency_ms": metrics.get("p95_latency_ms", 0.0),
+                "center_preference_index": metrics.get("center_preference_index", 0.0),
+                "partisan_skew_score": metrics.get("partisan_skew_score", 0.0),
+                "selection_stability_score": metrics.get("selection_stability_score", 0.0),
+                "identity_dominance_rate": metrics.get("identity_dominance_rate", 0.0),
+                "content_robustness_score": metrics.get("content_robustness_score", 0.0),
+            }
+        )
 
-    heatmap_df = (
-        condition_df[["condition", "left_ratio", "center_ratio", "right_ratio"]]
-        .melt(id_vars="condition", var_name="bucket", value_name="ratio")
+    inter_df = pd.DataFrame(rows).sort_values("model")
+    st.subheader("Model Comparison Table")
+    st.dataframe(inter_df, use_container_width=True, hide_index=True)
+
+    card_cols = st.columns(max(1, len(inter_df)))
+    for idx, row in inter_df.reset_index(drop=True).iterrows():
+        with card_cols[idx]:
+            st.markdown(f"**{row['model']}**")
+            st.metric("Parse success", f"{row['parse_success_rate']:.1%}")
+            st.metric("Avg latency", f"{row['avg_latency_ms']:.0f} ms")
+            st.metric("Robustness", f"{row['content_robustness_score']:.3f}")
+
+
+def render_condition_metrics_by_model(rows: list[dict[str, Any]]) -> None:
+    if not rows:
+        st.info("No condition-by-model metrics available yet.")
+        return
+
+    df = pd.DataFrame(rows)
+    st.subheader("Condition by Model")
+    st.dataframe(df, use_container_width=True, hide_index=True)
+
+    condition_order = [
+        "headlines_only",
+        "headlines_with_sources",
+        "sources_only",
+        "headlines_with_manipulated_sources",
+    ]
+    bucket_order = ["left", "center", "right"]
+    condition_labels = {
+        "headlines_only": "Headlines",
+        "headlines_with_sources": "+ Sources",
+        "sources_only": "Sources only",
+        "headlines_with_manipulated_sources": "Swapped sources",
+    }
+    bucket_labels = {
+        "left": "Left",
+        "center": "Center",
+        "right": "Right",
+    }
+
+    heatmap_df = df.melt(
+        id_vars=["model", "condition"],
+        value_vars=["left_ratio", "center_ratio", "right_ratio"],
+        var_name="bucket",
+        value_name="ratio",
     )
     heatmap_df["bucket"] = heatmap_df["bucket"].str.replace("_ratio", "", regex=False)
-    heatmap = px.density_heatmap(
-        heatmap_df,
-        x="bucket",
-        y="condition",
-        z="ratio",
-        color_continuous_scale="Blues",
-        text_auto=".0%",
-        title="Selected Leaning by Condition",
+    heatmap_df["condition_label"] = heatmap_df["condition"].map(condition_labels)
+    heatmap_df["bucket_label"] = heatmap_df["bucket"].map(bucket_labels)
+
+    st.markdown("**Overview Grid**")
+    models = sorted(df["model"].dropna().astype(str).unique().tolist())
+    grid_cols = st.columns(2)
+    for idx, model_name in enumerate(models):
+        model_heatmap = heatmap_df[heatmap_df["model"] == model_name].copy()
+        pivot = (
+            model_heatmap
+            .pivot(index="condition_label", columns="bucket_label", values="ratio")
+            .reindex(
+                index=[condition_labels[c] for c in condition_order],
+                columns=[bucket_labels[b] for b in bucket_order],
+            )
+            .fillna(0.0)
+        )
+        with grid_cols[idx % 2]:
+            fig = px.imshow(
+                pivot,
+                text_auto=".0%",
+                color_continuous_scale="Blues",
+                zmin=0.0,
+                zmax=1.0,
+                aspect="auto",
+                title=model_name,
+            )
+            fig.update_layout(
+                height=320,
+                margin=dict(l=8, r=8, t=42, b=8),
+                coloraxis_showscale=False,
+            )
+            fig.update_xaxes(title=None, side="bottom", tickangle=0)
+            fig.update_yaxes(title=None, automargin=False)
+            st.plotly_chart(fig, use_container_width=True)
+
+    st.markdown("**Focused View**")
+    selected_model = st.select_slider(
+        "Choose model",
+        options=models,
+        value=models[0] if models else None,
     )
-    st.plotly_chart(heatmap, use_container_width=True)
+    focused_df = df[df["model"] == selected_model].copy()
+    focused_heatmap = heatmap_df[heatmap_df["model"] == selected_model].copy()
+    focused_pivot = (
+        focused_heatmap
+        .pivot(index="condition_label", columns="bucket_label", values="ratio")
+        .reindex(
+            index=[condition_labels[c] for c in condition_order],
+            columns=[bucket_labels[b] for b in bucket_order],
+        )
+        .fillna(0.0)
+    )
+
+    heatmap_tab, distribution_tab, quality_tab = st.tabs(["Heatmap", "Distribution", "Quality"])
+    with heatmap_tab:
+        fig = px.imshow(
+            focused_pivot,
+            text_auto=".0%",
+            color_continuous_scale="Blues",
+            zmin=0.0,
+            zmax=1.0,
+            aspect="auto",
+            title=f"Selected Leaning Heatmap: {selected_model}",
+        )
+        fig.update_layout(
+            height=430,
+            margin=dict(l=120, r=10, t=48, b=10),
+            coloraxis_colorbar_title="ratio",
+        )
+        fig.update_xaxes(title=None, side="bottom", tickangle=0)
+        fig.update_yaxes(title="Condition", automargin=True, tickfont=dict(size=14))
+        st.plotly_chart(fig, use_container_width=True)
+
+    with distribution_tab:
+        dist_fig = px.bar(
+            focused_heatmap,
+            x="condition_label",
+            y="ratio",
+            color="bucket_label",
+            barmode="group",
+            category_orders={
+                "condition_label": [condition_labels[c] for c in condition_order],
+                "bucket_label": [bucket_labels[b] for b in bucket_order],
+            },
+            title=f"Selection Distribution by Condition: {selected_model}",
+        )
+        dist_fig.update_layout(yaxis_tickformat=".0%", height=430)
+        st.plotly_chart(dist_fig, use_container_width=True)
+
+    with quality_tab:
+        quality_df = focused_df[
+            ["condition", "parse_success_rate", "avg_latency_ms", "p95_latency_ms", "unknown_ratio"]
+        ].copy()
+        quality_df["parse_success_rate"] = quality_df["parse_success_rate"].fillna(0.0)
+        quality_df["unknown_ratio"] = quality_df["unknown_ratio"].fillna(0.0)
+        quality_df = quality_df.set_index("condition").reindex(condition_order).reset_index()
+        quality_df["condition_label"] = quality_df["condition"].map(condition_labels)
+
+        qcol1, qcol2 = st.columns(2)
+        with qcol1:
+            parse_fig = px.bar(
+                quality_df,
+                x="condition_label",
+                y="parse_success_rate",
+                title=f"Parse Success by Condition: {selected_model}",
+            )
+            parse_fig.update_layout(yaxis_tickformat=".0%", height=360)
+            st.plotly_chart(parse_fig, use_container_width=True)
+        with qcol2:
+            latency_fig = px.bar(
+                quality_df,
+                x="condition_label",
+                y="avg_latency_ms",
+                title=f"Average Latency by Condition: {selected_model}",
+            )
+            latency_fig.update_layout(height=360)
+            st.plotly_chart(latency_fig, use_container_width=True)
+
+        unknown_fig = px.bar(
+            quality_df,
+            x="condition_label",
+            y="unknown_ratio",
+            title=f"Unknown Ratio by Condition: {selected_model}",
+        )
+        unknown_fig.update_layout(yaxis_tickformat=".0%", height=300)
+        st.plotly_chart(unknown_fig, use_container_width=True)
+
+    center_fig = px.bar(
+        df,
+        x=df["condition"].map(condition_labels),
+        y="center_ratio",
+        color="model",
+        barmode="group",
+        title="Center Selection Ratio by Condition and Model",
+    )
+    center_fig.update_layout(yaxis_tickformat=".0%")
+    st.plotly_chart(center_fig, use_container_width=True)
+
+    parse_fig = px.bar(
+        df,
+        x=df["condition"].map(condition_labels),
+        y="parse_success_rate",
+        color="model",
+        barmode="group",
+        title="Parse Success Rate by Condition and Model",
+    )
+    parse_fig.update_layout(yaxis_tickformat=".0%")
+    st.plotly_chart(parse_fig, use_container_width=True)
 
     latency_fig = px.bar(
-        condition_df,
-        x="condition",
+        df,
+        x=df["condition"].map(condition_labels),
         y="avg_latency_ms",
-        title="Average Latency by Condition",
-        color="condition",
+        color="model",
+        barmode="group",
+        title="Average Latency by Condition and Model",
     )
     st.plotly_chart(latency_fig, use_container_width=True)
+
+    lean_fig = px.bar(
+        heatmap_df,
+        x="condition_label",
+        y="ratio",
+        color="bucket_label",
+        facet_col="model",
+        barmode="group",
+        title="Selection Distribution by Condition, Bucket, and Model",
+    )
+    lean_fig.update_layout(yaxis_tickformat=".0%")
+    st.plotly_chart(lean_fig, use_container_width=True)
 
 
 def render_top_outlets(rows: list[dict[str, Any]]) -> None:
@@ -291,15 +506,17 @@ def render_top_outlets(rows: list[dict[str, Any]]) -> None:
         st.info("No outlet selections available yet.")
         return
     outlet_df = pd.DataFrame(rows)
-    st.subheader("Top Selected Outlets")
+    st.subheader("Top Selected Outlets by Model")
+    st.dataframe(outlet_df, use_container_width=True, hide_index=True)
     fig = px.bar(
-        outlet_df.sort_values("count", ascending=True),
+        outlet_df.sort_values(["model", "count"], ascending=[True, True]),
         x="count",
         y="selected_outlet",
+        facet_col="model",
         orientation="h",
-        title="Top Selected Outlets",
-        color="count",
-        color_continuous_scale="Viridis",
+        title="Top Selected Outlets by Model",
+        color="model",
+        barmode="group",
     )
     st.plotly_chart(fig, use_container_width=True)
 
@@ -343,7 +560,7 @@ def render_inter_model(inter_model_data: dict[str, Any]) -> None:
         )
 
     inter_df = pd.DataFrame(rows).sort_values("model")
-    st.subheader("Inter-Model Metrics")
+    st.subheader("Inter-Model Plots")
     st.dataframe(inter_df, use_container_width=True, hide_index=True)
 
     fig1 = px.bar(
@@ -381,7 +598,6 @@ with st.sidebar:
     st.header("Settings")
     api_base = st.text_input("API Base URL", value=DEFAULT_API_BASE).rstrip("/")
     ollama_base = st.text_input("Ollama Base URL", value=DEFAULT_OLLAMA_BASE).rstrip("/")
-    model_filter = st.text_input("Model filter (optional)", value="")
     selected_run = st.text_input("Run filter (optional)", value="")
 
     st.divider()
@@ -423,23 +639,7 @@ with st.sidebar:
 analytics_tab, runner_tab = st.tabs(["Analytics", "Run Models"])
 
 with analytics_tab:
-    st.subheader("Summary")
-
-    try:
-        summary_params = {}
-        if model_filter:
-            summary_params["model"] = model_filter
-        if selected_run:
-            summary_params["run_id"] = selected_run
-        summary_params = summary_params or None
-        summary = fetch_json(f"{api_base}/metrics/summary", params=summary_params)
-        metrics = summary.get("metrics", {})
-        count = int(summary.get("count", 0))
-
-        metrics_cards(metrics, count)
-        render_distribution_charts(metrics)
-    except Exception as exc:
-        st.error(f"Could not load summary metrics: {exc}")
+    render_filter_scope(selected_run, label="Analytics scope")
 
     st.subheader("Runs")
     try:
@@ -453,9 +653,11 @@ with analytics_tab:
         st.error(f"Could not load run list: {exc}")
 
     try:
+        render_filter_scope(selected_run, label="Inter-model scope")
         inter_model_params = {"run_id": selected_run} if selected_run else None
         inter_model = fetch_json(f"{api_base}/metrics/inter-model", params=inter_model_params)
         if isinstance(inter_model, dict) and "error" not in inter_model:
+            render_inter_model_overview(inter_model)
             render_inter_model(inter_model)
         else:
             st.info("Inter-model metrics are not available yet.")
@@ -463,40 +665,35 @@ with analytics_tab:
         st.error(f"Could not load inter-model metrics: {exc}")
 
     try:
-        condition_params = {}
-        if model_filter:
-            condition_params["model"] = model_filter
-        if selected_run:
-            condition_params["run_id"] = selected_run
-        condition_rows = fetch_json(f"{api_base}/metrics/conditions", params=condition_params or None).get("rows", [])
-        render_condition_metrics(condition_rows)
+        render_filter_scope(selected_run, label="Condition comparison scope")
+        condition_rows = fetch_json(
+            f"{api_base}/metrics/conditions-by-model",
+            params={"run_id": selected_run} if selected_run else None,
+        ).get("rows", [])
+        render_condition_metrics_by_model(condition_rows)
     except Exception as exc:
-        st.error(f"Could not load condition metrics: {exc}")
+        st.error(f"Could not load condition-by-model metrics: {exc}")
 
     col1, col2 = st.columns(2)
     with col1:
         try:
-            outlet_params = {}
-            if model_filter:
-                outlet_params["model"] = model_filter
-            if selected_run:
-                outlet_params["run_id"] = selected_run
-            top_outlets = fetch_json(f"{api_base}/metrics/top-outlets", params=outlet_params or None).get("rows", [])
+            render_filter_scope(selected_run, label="Outlet metrics scope")
+            outlet_params = {"run_id": selected_run} if selected_run else None
+            top_outlets = fetch_json(f"{api_base}/metrics/top-outlets-by-model", params=outlet_params).get("rows", [])
             render_top_outlets(top_outlets)
         except Exception as exc:
             st.error(f"Could not load outlet metrics: {exc}")
     with col2:
         try:
-            run_params = {"model": model_filter} if model_filter else None
-            run_rows = fetch_json(f"{api_base}/metrics/run-summaries", params=run_params).get("rows", [])
+            render_filter_scope(selected_run, label="Run summary scope")
+            run_rows = fetch_json(f"{api_base}/metrics/run-summaries").get("rows", [])
             render_run_summaries(run_rows)
         except Exception as exc:
             st.error(f"Could not load run summaries: {exc}")
 
     try:
+        render_filter_scope(selected_run, label="Recent records scope")
         record_params = {"limit": 50}
-        if model_filter:
-            record_params["model"] = model_filter
         if selected_run:
             record_params["run_id"] = selected_run
         records = fetch_json(f"{api_base}/metrics/records", params=record_params).get("rows", [])

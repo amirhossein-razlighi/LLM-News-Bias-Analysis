@@ -139,8 +139,8 @@ def main() -> None:
 
     progress = tqdm(total=total_requests, desc="Running experiments", unit="request")
 
-    for incident, bundles in prepared_runs:
-        for model in manifest.models:
+    for model in manifest.models:
+        for incident, bundles in prepared_runs:
             for condition, condition_bundles in bundles.items():
                 for bundle_idx, candidates in enumerate(condition_bundles, start=1):
                     request_id = str(uuid4())
@@ -172,6 +172,7 @@ def main() -> None:
                             max_tokens=model.max_tokens,
                             timeout_seconds=model.timeout_seconds,
                             retries=args.retries,
+                            think=model.think,
                         )
                         parsed = parse_model_response(
                             text=generation.text,

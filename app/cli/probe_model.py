@@ -14,6 +14,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--temperature", type=float, default=0.0)
     parser.add_argument("--max-tokens", type=int, default=300)
     parser.add_argument("--timeout", type=int, default=60)
+    parser.add_argument("--think", action="store_true")
     return parser.parse_args()
 
 
@@ -26,6 +27,7 @@ def main() -> None:
         temperature=args.temperature,
         max_tokens=args.max_tokens,
         timeout_seconds=args.timeout,
+        think=args.think,
     )
     print(
         json.dumps(

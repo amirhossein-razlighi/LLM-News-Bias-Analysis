@@ -84,6 +84,7 @@ class ModelSpec(BaseModel):
     temperature: float = 0.0
     max_tokens: int = 300
     timeout_seconds: int = 60
+    think: bool | None = None
 
 
 class ModelManifest(BaseModel):

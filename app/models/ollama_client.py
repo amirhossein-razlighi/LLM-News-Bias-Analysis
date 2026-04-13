@@ -32,41 +32,45 @@ class OllamaClient:
         max_tokens: int = 300,
         timeout_seconds: int = 60,
         retries: int = 2,
+        think: bool | None = None,
     ) -> OllamaGeneration:
+        total_predict = max_tokens * 4 if think else max_tokens
+        generate_payload = {
+            "model": model,
+            "prompt": prompt,
+            "stream": False,
+            "options": {
+                "temperature": temperature,
+                "num_predict": total_predict,
+            },
+        }
+        chat_payload = {
+            "model": model,
+            "messages": [{"role": "user", "content": prompt}],
+            "stream": False,
+            "options": {
+                "temperature": temperature,
+                "num_predict": total_predict,
+            },
+        }
+        compat_payload = {
+            "model": model,
+            "messages": [{"role": "user", "content": prompt}],
+            "temperature": temperature,
+            "max_tokens": total_predict,
+        }
+
+        # Qwen3 and other reasoning models can emit large "thinking" traces that
+        # consume the token budget and truncate the actual answer. For controlled
+        # evaluation runs, disable thinking explicitly when configured.
+        if think is not None:
+            generate_payload["think"] = think
+            chat_payload["think"] = think
+
         endpoint_requests = [
-            (
-                "/api/generate",
-                {
-                    "model": model,
-                    "prompt": prompt,
-                    "stream": False,
-                    "options": {
-                        "temperature": temperature,
-                        "num_predict": max_tokens,
-                    },
-                },
-            ),
-            (
-                "/api/chat",
-                {
-                    "model": model,
-                    "messages": [{"role": "user", "content": prompt}],
-                    "stream": False,
-                    "options": {
-                        "temperature": temperature,
-                        "num_predict": max_tokens,
-                    },
-                },
-            ),
-            (
-                "/v1/chat/completions",
-                {
-                    "model": model,
-                    "messages": [{"role": "user", "content": prompt}],
-                    "temperature": temperature,
-                    "max_tokens": max_tokens,
-                },
-            ),
+            ("/api/generate", generate_payload),
+            ("/api/chat", chat_payload),
+            ("/v1/chat/completions", compat_payload),
         ]
 
         last_error: Exception | None = None

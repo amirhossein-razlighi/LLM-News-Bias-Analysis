@@ -24,6 +24,50 @@ def save_to_db(df):
     df.to_csv(DB_FILE, index=False)
 
 
+def _safe_float(value, default: float = 0.0) -> float:
+    try:
+        if pd.isna(value) or np.isinf(value):
+            return default
+        return float(value)
+    except Exception:
+        return default
+
+
+def _ensure_analytics_columns(df: pd.DataFrame) -> pd.DataFrame:
+    if df.empty:
+        return df
+
+    data = df.copy()
+    if "candidate_signature" not in data.columns:
+        data["candidate_signature"] = data["request_id"].astype(str)
+    else:
+        data["candidate_signature"] = (
+            data["candidate_signature"]
+            .fillna("")
+            .astype(str)
+            .replace("", pd.NA)
+            .fillna(data["request_id"].astype(str))
+        )
+
+    if "selected_bucket" not in data.columns:
+        data["selected_bucket"] = "unknown"
+    else:
+        data["selected_bucket"] = data["selected_bucket"].fillna("unknown").astype(str)
+
+    if "parsed_successfully" not in data.columns:
+        data["parsed_successfully"] = False
+    else:
+        data["parsed_successfully"] = data["parsed_successfully"].fillna(False)
+
+    if "latency_ms" not in data.columns:
+        data["latency_ms"] = 0
+
+    if "selected_position" not in data.columns:
+        data["selected_position"] = pd.NA
+
+    return data
+
+
 # --- SCHEMA ---
 class ExperimentResult(BaseModel):
     request_id: str
@@ -58,7 +102,7 @@ def calculate_all_metrics(df: pd.DataFrame):
     if df.empty:
         return {}
 
-    data = df.copy()
+    data = _ensure_analytics_columns(df)
     if "condition" in data.columns:
         data["condition"] = data["condition"].replace(
             {
@@ -102,14 +146,14 @@ def calculate_all_metrics(df: pd.DataFrame):
         if not valid_swap.empty:
             identity_dominance = (valid_swap['headlines_sources'] != valid_swap['swapped_sources']).mean()
 
-    parse_rate = float(data["parsed_successfully"].mean()) if "parsed_successfully" in data.columns else 0.0
-    fallback_rate = float((data.get("parse_status") == "fallback").mean()) if "parse_status" in data.columns else 0.0
-    failure_rate = float((data.get("parse_status") == "failed").mean()) if "parse_status" in data.columns else 0.0
+    parse_rate = _safe_float(data["parsed_successfully"].mean()) if "parsed_successfully" in data.columns else 0.0
+    fallback_rate = _safe_float((data.get("parse_status") == "fallback").mean()) if "parse_status" in data.columns else 0.0
+    failure_rate = _safe_float((data.get("parse_status") == "failed").mean()) if "parse_status" in data.columns else 0.0
     latency = pd.to_numeric(data.get("latency_ms"), errors="coerce").dropna()
-    latency_avg = float(latency.mean()) if not latency.empty else 0.0
-    latency_p50 = float(latency.quantile(0.5)) if not latency.empty else 0.0
-    latency_p95 = float(latency.quantile(0.95)) if not latency.empty else 0.0
-    unknown_bucket_rate = float((data["selected_bucket"] == "unknown").mean()) if "selected_bucket" in data.columns else 0.0
+    latency_avg = _safe_float(latency.mean()) if not latency.empty else 0.0
+    latency_p50 = _safe_float(latency.quantile(0.5)) if not latency.empty else 0.0
+    latency_p95 = _safe_float(latency.quantile(0.95)) if not latency.empty else 0.0
+    unknown_bucket_rate = _safe_float((data["selected_bucket"] == "unknown").mean()) if "selected_bucket" in data.columns else 0.0
 
     return {
         "selection_distribution": counts,
@@ -209,7 +253,7 @@ def _normalize_generated_rows(model_decisions: List[dict], request_index: dict[s
 
 
 def _apply_filters(df: pd.DataFrame, model: Optional[str] = None, run_id: Optional[str] = None) -> pd.DataFrame:
-    filtered = df
+    filtered = _ensure_analytics_columns(df)
     if model:
         filtered = filtered[filtered["model_name"] == model]
     if run_id:
@@ -221,6 +265,7 @@ def _condition_metrics(df: pd.DataFrame) -> List[dict]:
     if df.empty:
         return []
 
+    df = _ensure_analytics_columns(df)
     rows: List[dict] = []
     for condition, group in df.groupby("condition", dropna=False):
         known = group[group["selected_bucket"].isin(["left", "center", "right"])]
@@ -229,14 +274,14 @@ def _condition_metrics(df: pd.DataFrame) -> List[dict]:
             {
                 "condition": str(condition),
                 "count": int(len(group)),
-                "parse_success_rate": float(group["parsed_successfully"].mean()),
-                "avg_latency_ms": float(pd.to_numeric(group["latency_ms"], errors="coerce").mean()),
-                "p95_latency_ms": float(pd.to_numeric(group["latency_ms"], errors="coerce").quantile(0.95)),
-                "left_ratio": float(distribution.get("left", 0.0)),
-                "center_ratio": float(distribution.get("center", 0.0)),
-                "right_ratio": float(distribution.get("right", 0.0)),
-                "unknown_ratio": float((group["selected_bucket"] == "unknown").mean()),
-                "mean_selected_position": float(pd.to_numeric(group["selected_position"], errors="coerce").mean()),
+                "parse_success_rate": _safe_float(group["parsed_successfully"].mean()),
+                "avg_latency_ms": _safe_float(pd.to_numeric(group["latency_ms"], errors="coerce").mean()),
+                "p95_latency_ms": _safe_float(pd.to_numeric(group["latency_ms"], errors="coerce").quantile(0.95)),
+                "left_ratio": _safe_float(distribution.get("left", 0.0)),
+                "center_ratio": _safe_float(distribution.get("center", 0.0)),
+                "right_ratio": _safe_float(distribution.get("right", 0.0)),
+                "unknown_ratio": _safe_float((group["selected_bucket"] == "unknown").mean()),
+                "mean_selected_position": _safe_float(pd.to_numeric(group["selected_position"], errors="coerce").mean()),
             }
         )
     return sorted(rows, key=lambda row: row["condition"])
@@ -245,6 +290,7 @@ def _condition_metrics(df: pd.DataFrame) -> List[dict]:
 def _run_summaries(df: pd.DataFrame) -> List[dict]:
     if df.empty:
         return []
+    df = _ensure_analytics_columns(df)
     rows: List[dict] = []
     for run_id, group in df.groupby("run_id", dropna=False):
         rows.append(
@@ -253,8 +299,8 @@ def _run_summaries(df: pd.DataFrame) -> List[dict]:
                 "count": int(len(group)),
                 "models": int(group["model_name"].nunique()),
                 "incidents": int(group["incident_id"].nunique()),
-                "parse_success_rate": float(group["parsed_successfully"].mean()),
-                "avg_latency_ms": float(pd.to_numeric(group["latency_ms"], errors="coerce").mean()),
+                "parse_success_rate": _safe_float(group["parsed_successfully"].mean()),
+                "avg_latency_ms": _safe_float(pd.to_numeric(group["latency_ms"], errors="coerce").mean()),
                 "first_timestamp_utc": str(group["timestamp_utc"].dropna().min() or ""),
                 "last_timestamp_utc": str(group["timestamp_utc"].dropna().max() or ""),
             }
@@ -265,6 +311,7 @@ def _run_summaries(df: pd.DataFrame) -> List[dict]:
 def _top_outlets(df: pd.DataFrame, limit: int = 15) -> List[dict]:
     if df.empty:
         return []
+    df = _ensure_analytics_columns(df)
     counts = (
         df[df["selected_outlet"].fillna("").astype(str) != ""]
         .groupby("selected_outlet")
@@ -278,6 +325,7 @@ def _top_outlets(df: pd.DataFrame, limit: int = 15) -> List[dict]:
 def _sample_records(df: pd.DataFrame, limit: int = 100) -> List[dict]:
     if df.empty:
         return []
+    df = _ensure_analytics_columns(df)
     cols = [
         "run_id",
         "incident_id",

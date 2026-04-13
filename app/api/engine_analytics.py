@@ -33,6 +33,27 @@ def _safe_float(value, default: float = 0.0) -> float:
         return default
 
 
+def _json_safe_value(value):
+    if pd.isna(value):
+        return None
+    if isinstance(value, (np.floating, float)):
+        if np.isnan(value) or np.isinf(value):
+            return None
+        return float(value)
+    if isinstance(value, (np.integer, int)):
+        return int(value)
+    if isinstance(value, (np.bool_, bool)):
+        return bool(value)
+    return value
+
+
+def _json_safe_records(rows: List[dict]) -> List[dict]:
+    return [
+        {key: _json_safe_value(value) for key, value in row.items()}
+        for row in rows
+    ]
+
+
 def _ensure_analytics_columns(df: pd.DataFrame) -> pd.DataFrame:
     if df.empty:
         return df
@@ -340,7 +361,8 @@ def _sample_records(df: pd.DataFrame, limit: int = 100) -> List[dict]:
         "timestamp_utc",
     ]
     available_cols = [col for col in cols if col in df.columns]
-    return df.sort_values("timestamp_utc", ascending=False)[available_cols].head(limit).to_dict(orient="records")
+    rows = df.sort_values("timestamp_utc", ascending=False)[available_cols].head(limit).to_dict(orient="records")
+    return _json_safe_records(rows)
 
 
 def _ingest_run_directory(

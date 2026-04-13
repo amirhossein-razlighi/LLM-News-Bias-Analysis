@@ -29,7 +29,7 @@ except ImportError:  # pragma: no cover - fallback for minimal installs
         return _NullProgress()
 
 from app.experiment.condition_builder import build_condition_bundles
-from app.experiment.prompt_builder import build_selection_prompt
+from app.experiment.prompt_builder import build_selection_prompt, selection_response_json_schema
 from app.models.ollama_client import OllamaClient
 from app.parsing.response_parser import parse_model_response
 from app.schemas.models import (
@@ -113,6 +113,7 @@ def main() -> None:
     manifest = _load_manifest(args.models_manifest)
 
     client = OllamaClient(base_url=args.base_url)
+    response_schema = selection_response_json_schema()
 
     prepared_runs = _prepare_bundles(
         incidents,
@@ -173,6 +174,7 @@ def main() -> None:
                             timeout_seconds=model.timeout_seconds,
                             retries=args.retries,
                             think=model.think,
+                            response_schema=response_schema,
                         )
                         parsed = parse_model_response(
                             text=generation.text,

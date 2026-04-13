@@ -26,12 +26,20 @@ def test_generate_calls_ollama(monkeypatch):
     def fake_post(url, json, timeout):
         assert url.endswith("/api/generate")
         assert json["model"] == "llama3"
+        assert json["format"]["type"] == "object"
         return _Response({"response": '{"selected_article_id":"a1","reason":"ok"}'})
 
     monkeypatch.setattr(requests, "post", fake_post)
 
     client = OllamaClient()
-    generation = client.generate(model="llama3", prompt="hello")
+    generation = client.generate(
+        model="llama3",
+        prompt="hello",
+        response_schema={
+            "type": "object",
+            "properties": {"selected_article_id": {"type": "string"}, "reason": {"type": "string"}},
+        },
+    )
     assert "selected_article_id" in generation.text
 
 

@@ -33,6 +33,7 @@ class OllamaClient:
         timeout_seconds: int = 60,
         retries: int = 2,
         think: bool | None = None,
+        response_schema: dict[str, Any] | None = None,
     ) -> OllamaGeneration:
         total_predict = max_tokens * 4 if think else max_tokens
         generate_payload = {
@@ -66,6 +67,17 @@ class OllamaClient:
         if think is not None:
             generate_payload["think"] = think
             chat_payload["think"] = think
+
+        if response_schema is not None:
+            generate_payload["format"] = response_schema
+            chat_payload["format"] = response_schema
+            compat_payload["response_format"] = {
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "selection_response",
+                    "schema": response_schema,
+                },
+            }
 
         endpoint_requests = [
             ("/api/generate", generate_payload),

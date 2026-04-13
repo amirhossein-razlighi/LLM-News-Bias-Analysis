@@ -13,7 +13,7 @@ import streamlit as st
 import yaml
 
 from app.experiment.condition_builder import build_condition_bundles
-from app.experiment.prompt_builder import build_selection_prompt
+from app.experiment.prompt_builder import build_selection_prompt, selection_response_json_schema
 from app.models.ollama_client import OllamaClient
 from app.parsing.response_parser import parse_model_response
 from app.schemas.models import (
@@ -75,6 +75,7 @@ def run_batch_experiment(
     conditions = [ConditionName(c) for c in condition_values]
     manifest = load_manifest(models_manifest_path)
     client = OllamaClient(base_url=ollama_base_url)
+    response_schema = selection_response_json_schema()
 
     prepared_runs: list[tuple[PreparedIncident, dict[ConditionName, list[list[Article]]]]] = []
     for incident in incidents:
@@ -146,6 +147,7 @@ def run_batch_experiment(
                             timeout_seconds=model.timeout_seconds,
                             retries=retries,
                             think=model.think,
+                            response_schema=response_schema,
                         )
                         parsed = parse_model_response(
                             text=generation.text,

@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 
+from app.experiment.prompt_builder import selection_response_json_schema
 from app.models.ollama_client import OllamaClient
 
 
@@ -28,6 +29,7 @@ def main() -> None:
         max_tokens=args.max_tokens,
         timeout_seconds=args.timeout,
         think=args.think,
+        response_schema=selection_response_json_schema(),
     )
     print(
         json.dumps(

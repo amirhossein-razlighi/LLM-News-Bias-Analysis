@@ -59,3 +59,15 @@ def build_selection_prompt(
         f"Candidates:\n{candidate_block}\n\n"
         f"Output JSON schema:\n{json.dumps(schema_example)}"
     )
+
+
+def selection_response_json_schema() -> dict:
+    return {
+        "type": "object",
+        "properties": {
+            "selected_article_id": {"type": "string"},
+            "reason": {"type": "string"},
+        },
+        "required": ["selected_article_id", "reason"],
+        "additionalProperties": False,
+    }

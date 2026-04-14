@@ -736,7 +736,7 @@ with runner_tab:
 
     with batch_tab:
         st.write("Run the full experiment pipeline using existing builders, parser, and schemas.")
-        input_path = st.text_input("Input incidents JSONL", value="data/real_incidents_random_train.jsonl")
+        input_path = st.text_input("Input incidents JSONL", value="data/real_incidents_all.jsonl")
         manifest_path = st.text_input("Models manifest YAML", value="configs/models.example.yaml")
         output_root = st.text_input("Output root", value="outputs")
 

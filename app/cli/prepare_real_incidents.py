@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import argparse
-import csv
 import json
 from collections import defaultdict
 from pathlib import Path
@@ -32,10 +31,6 @@ def parse_args() -> argparse.Namespace:
         help="Path to the output PreparedIncident JSONL file",
     )
     parser.add_argument(
-        "--split-file",
-        help="Optional TSV split file with an ID column used to filter articles before grouping",
-    )
-    parser.add_argument(
         "--topics",
         nargs="+",
         help="Optional list of topics to keep",
@@ -58,20 +53,6 @@ def parse_args() -> argparse.Namespace:
         help="Optional cap on the number of generated incidents after filtering",
     )
     return parser.parse_args()
-
-
-def _load_split_ids(path: str | None) -> set[str] | None:
-    if not path:
-        return None
-
-    ids: set[str] = set()
-    with Path(path).open("r", encoding="utf-8", newline="") as handle:
-        reader = csv.DictReader(handle, delimiter="\t")
-        for row in reader:
-            article_id = (row.get("ID") or row.get("id") or "").strip()
-            if article_id:
-                ids.add(article_id)
-    return ids
 
 
 def _normalize_leaning(record: dict) -> str | None:
@@ -115,7 +96,6 @@ def _topic_summary(topic: str) -> str:
 
 def main() -> None:
     args = parse_args()
-    split_ids = _load_split_ids(args.split_file)
     allowed_topics = {topic.strip().lower() for topic in args.topics or []}
 
     grouped: dict[str, dict[str, list[Article]]] = defaultdict(lambda: defaultdict(list))
@@ -125,9 +105,6 @@ def main() -> None:
 
     for path in sorted(json_dir.glob("*.json")):
         raw = json.loads(path.read_text(encoding="utf-8"))
-        article_id = str(raw.get("ID") or raw.get("id") or "").strip()
-        if split_ids is not None and article_id not in split_ids:
-            continue
 
         topic = str(raw.get("topic", "")).strip().lower() or "unknown"
         if allowed_topics and topic not in allowed_topics:
@@ -158,7 +135,6 @@ def main() -> None:
             metadata={
                 "source": "real_topic_grouping",
                 "json_dir": str(json_dir),
-                "split_file": args.split_file,
                 "article_counts": {
                     leaning: len(by_leaning.get(leaning, []))
                     for leaning in ("left", "center", "right")

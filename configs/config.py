@@ -4,8 +4,6 @@ DATASET_ROOT = os.environ.get("DATASET_ROOT", "../")
 
 JSONS_DIR = os.path.join(DATASET_ROOT, "data", "jsons")
 
-SPLITS_DIR = os.path.join(DATASET_ROOT, "data", "splits")
-
 OUTPUT_DIR = os.environ.get("OUTPUT_DIR", "./outputs")
 
 BIAS_LABEL_MAP = {

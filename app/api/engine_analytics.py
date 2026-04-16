@@ -1,27 +1,43 @@
-import pandas as pd
-import numpy as np
-from typing import List, Optional
-from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
-import os
 import json
+import os
 import re
 from pathlib import Path
+from typing import List, Optional
+
+import numpy as np
+import pandas as pd
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
 
 app = FastAPI(title="Sourcerers Analytics Engine")
 
 # --- DATABASE LAYER ---
-DB_FILE = "experiment_database.csv"
+BASE_DIR = Path(__file__).resolve().parents[2]
+DB_FILE = BASE_DIR / "experiment_database.csv"
+OUTPUTS_DIR = BASE_DIR / "outputs"
+WRITE_ENDPOINTS_ENABLED = os.getenv(
+    "ENABLE_ANALYTICS_WRITE_ENDPOINTS",
+    "0" if os.getenv("VERCEL") else "1",
+).strip().lower() not in {"0", "false", "no"}
 
 
-def load_db():
-    if os.path.exists(DB_FILE) and os.path.getsize(DB_FILE) > 0:
-        return pd.read_csv(DB_FILE)
+def load_db(db_file: Path = DB_FILE):
+    if db_file.exists() and db_file.stat().st_size > 0:
+        return pd.read_csv(db_file)
     return pd.DataFrame()
 
 
-def save_to_db(df):
-    df.to_csv(DB_FILE, index=False)
+def save_to_db(df: pd.DataFrame, db_file: Path = DB_FILE) -> None:
+    db_file.parent.mkdir(parents=True, exist_ok=True)
+    df.to_csv(db_file, index=False)
+
+
+def _require_write_access() -> None:
+    if not WRITE_ENDPOINTS_ENABLED:
+        raise HTTPException(
+            status_code=403,
+            detail="Write endpoints are disabled in this deployment.",
+        )
 
 
 def _safe_float(value, default: float = 0.0) -> float:
@@ -418,6 +434,7 @@ def _ingest_run_directory(
     run_dir: Path,
     model_decisions_file: str,
     experiment_requests_file: str,
+    db_file: Path = DB_FILE,
 ) -> dict:
     model_decisions_path = run_dir / model_decisions_file
     experiment_requests_path = run_dir / experiment_requests_file
@@ -432,11 +449,11 @@ def _ingest_run_directory(
     request_index = _build_request_index(request_rows)
     normalized_rows = _normalize_generated_rows(model_decisions_rows, request_index)
 
-    global_df = load_db()
+    global_df = load_db(db_file)
     before_count = len(global_df)
     new_data = pd.DataFrame(normalized_rows)
     updated_db = pd.concat([global_df, new_data], ignore_index=True).drop_duplicates(subset=['request_id'])
-    save_to_db(updated_db)
+    save_to_db(updated_db, db_file)
 
     return {
         "run_dir": str(run_dir),
@@ -446,9 +463,74 @@ def _ingest_run_directory(
     }
 
 
+def sync_outputs_to_db(
+    outputs_dir: Path = OUTPUTS_DIR,
+    *,
+    db_file: Path = DB_FILE,
+    run_dir_prefix: str = "run_",
+    model_decisions_file: str = "model_decisions.jsonl",
+    experiment_requests_file: str = "experiment_requests.jsonl",
+) -> dict:
+    outputs_dir = Path(outputs_dir)
+    db_file = Path(db_file)
+
+    if not outputs_dir.exists() or not outputs_dir.is_dir():
+        return {
+            "status": "skipped",
+            "outputs_dir": str(outputs_dir),
+            "db_file": str(db_file),
+            "runs_found": 0,
+            "runs_ingested": 0,
+            "records_seen": 0,
+            "records_added": 0,
+            "results": [],
+        }
+
+    run_dirs = sorted(
+        d for d in outputs_dir.iterdir()
+        if d.is_dir() and d.name.startswith(run_dir_prefix)
+    )
+
+    results: List[dict] = []
+    records_seen = 0
+    records_added = 0
+    runs_ingested = 0
+
+    for run_dir in run_dirs:
+        has_required = (
+            (run_dir / model_decisions_file).exists()
+            and (run_dir / experiment_requests_file).exists()
+        )
+        if not has_required:
+            continue
+
+        result = _ingest_run_directory(
+            run_dir=run_dir,
+            model_decisions_file=model_decisions_file,
+            experiment_requests_file=experiment_requests_file,
+            db_file=db_file,
+        )
+        results.append(result)
+        records_seen += result["records_seen"]
+        records_added += result["records_added"]
+        runs_ingested += 1
+
+    return {
+        "status": "success",
+        "outputs_dir": str(outputs_dir),
+        "db_file": str(db_file),
+        "runs_found": len(run_dirs),
+        "runs_ingested": runs_ingested,
+        "records_seen": records_seen,
+        "records_added": records_added,
+        "results": results,
+    }
+
+
 # --- ENDPOINTS ---
 @app.post("/ingest")
 async def ingest_results(results: List[ExperimentResult]):
+    _require_write_access()
     global_df = load_db()
     new_data = pd.DataFrame([r.model_dump() for r in results])
     updated_db = pd.concat([global_df, new_data], ignore_index=True).drop_duplicates(subset=['request_id'])
@@ -458,6 +540,7 @@ async def ingest_results(results: List[ExperimentResult]):
 
 @app.post("/ingest/run")
 async def ingest_run_outputs(payload: IngestRunRequest):
+    _require_write_access()
     run_dir = Path(payload.run_dir)
     if not run_dir.exists() or not run_dir.is_dir():
         raise HTTPException(status_code=400, detail=f"run_dir not found: {run_dir}")
@@ -478,6 +561,7 @@ async def ingest_run_outputs(payload: IngestRunRequest):
 
 @app.post("/ingest/runs")
 async def ingest_all_runs(payload: IngestRunsRequest):
+    _require_write_access()
     outputs_dir = Path(payload.outputs_dir)
     if not outputs_dir.exists() or not outputs_dir.is_dir():
         raise HTTPException(status_code=400, detail=f"outputs_dir not found: {outputs_dir}")
@@ -541,7 +625,10 @@ async def get_inter_model(run_id: Optional[str] = None):
     if df.empty:
         return {"error": "No data"}
     return {
-        model: calculate_all_metrics(df[df['model_name'] == model])
+        model: {
+            **calculate_all_metrics(df[df['model_name'] == model]),
+            "record_count": int(len(df[df["model_name"] == model])),
+        }
         for model in sorted(df['model_name'].dropna().astype(str).unique())
     }
 
@@ -599,7 +686,16 @@ async def get_run_ids():
 
 @app.get("/export/csv")
 async def export_csv():
-    return {"file_path": os.path.abspath(DB_FILE)}
+    return {"file_path": DB_FILE.name}
+
+
+@app.get("/healthz")
+async def healthcheck():
+    return {
+        "status": "ok",
+        "db_exists": DB_FILE.exists(),
+        "write_endpoints_enabled": WRITE_ENDPOINTS_ENABLED,
+    }
 
 
 if __name__ == "__main__":

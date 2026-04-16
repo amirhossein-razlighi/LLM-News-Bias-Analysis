@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import json
+import os
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -8,10 +8,21 @@ from uuid import uuid4
 
 import pandas as pd
 import plotly.express as px
-import requests
 import streamlit as st
 import yaml
 
+from app.api.engine_analytics import (
+    DB_FILE,
+    _apply_filters,
+    _condition_metrics_by_model,
+    _ingest_run_directory,
+    _run_summaries,
+    _sample_records,
+    _top_outlets_by_model,
+    calculate_all_metrics,
+    load_db,
+    sync_outputs_to_db,
+)
 from app.experiment.condition_builder import build_condition_bundles
 from app.experiment.prompt_builder import build_selection_prompt, selection_response_json_schema
 from app.models.ollama_client import OllamaClient
@@ -27,8 +38,9 @@ from app.schemas.models import (
 )
 from app.utils.io import append_jsonl, read_jsonl
 
-DEFAULT_API_BASE = "http://127.0.0.1:8000"
 DEFAULT_OLLAMA_BASE = "http://localhost:11434"
+DEFAULT_OUTPUTS_DIR = "outputs"
+IS_STREAMLIT_CLOUD = bool(os.getenv("STREAMLIT_SHARING_MODE"))
 
 
 def render_filter_scope(selected_run: str, *, label: str = "Scope") -> None:
@@ -37,16 +49,38 @@ def render_filter_scope(selected_run: str, *, label: str = "Scope") -> None:
 
 
 @st.cache_data(ttl=5)
-def fetch_json(url: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
-    response = requests.get(url, params=params, timeout=20)
-    response.raise_for_status()
-    return response.json()
+def get_dashboard_snapshot(selected_run: str = "", record_limit: int = 50) -> dict[str, Any]:
+    sync_outputs_to_db()
 
+    df = load_db()
+    filtered = _apply_filters(df, run_id=selected_run or None)
+    metrics = calculate_all_metrics(filtered)
 
-def post_json(url: str, payload: dict[str, Any]) -> dict[str, Any]:
-    response = requests.post(url, json=payload, timeout=30)
-    response.raise_for_status()
-    return response.json()
+    if filtered.empty:
+        inter_model: dict[str, Any] = {}
+    else:
+        inter_model = {
+            model: {
+                **calculate_all_metrics(filtered[filtered["model_name"] == model]),
+                "record_count": int(len(filtered[filtered["model_name"] == model])),
+            }
+            for model in sorted(filtered["model_name"].dropna().astype(str).unique())
+        }
+
+    runs = []
+    if not df.empty and "run_id" in df.columns:
+        runs = sorted([r for r in df["run_id"].dropna().astype(str).unique().tolist() if r])
+
+    return {
+        "metrics": metrics,
+        "count": int(len(filtered)),
+        "runs": runs,
+        "inter_model": inter_model,
+        "condition_rows": _condition_metrics_by_model(filtered),
+        "top_outlets": _top_outlets_by_model(filtered),
+        "run_summaries": _run_summaries(df),
+        "records": _sample_records(filtered, limit=record_limit),
+    }
 
 
 def load_manifest(path: str) -> ModelManifest:
@@ -510,16 +544,35 @@ def render_top_outlets(rows: list[dict[str, Any]]) -> None:
     outlet_df = pd.DataFrame(rows)
     st.subheader("Top Selected Outlets by Model")
     st.dataframe(outlet_df, use_container_width=True, hide_index=True)
+
+    models = sorted(outlet_df["model"].dropna().astype(str).unique().tolist())
+    selected_model = st.selectbox(
+        "Outlet chart model",
+        options=models,
+        key="top_outlets_model",
+    )
+
+    filtered_df = (
+        outlet_df[outlet_df["model"] == selected_model]
+        .sort_values("count", ascending=True)
+        .copy()
+    )
+
     fig = px.bar(
-        outlet_df.sort_values(["model", "count"], ascending=[True, True]),
+        filtered_df,
         x="count",
         y="selected_outlet",
-        facet_col="model",
         orientation="h",
-        title="Top Selected Outlets by Model",
-        color="model",
-        barmode="group",
+        title=f"Top Selected Outlets: {selected_model}",
+        color_discrete_sequence=["#3366CC"],
+        text="count",
     )
+    fig.update_layout(
+        showlegend=False,
+        height=max(320, 34 * len(filtered_df) + 140),
+        margin=dict(l=8, r=8, t=56, b=8),
+    )
+    fig.update_traces(textposition="outside", cliponaxis=False)
     st.plotly_chart(fig, use_container_width=True)
 
 
@@ -598,18 +651,18 @@ st.title("Sourcerers Analytics Dashboard")
 
 with st.sidebar:
     st.header("Settings")
-    api_base = st.text_input("API Base URL", value=DEFAULT_API_BASE).rstrip("/")
     ollama_base = st.text_input("Ollama Base URL", value=DEFAULT_OLLAMA_BASE).rstrip("/")
     selected_run = st.text_input("Run filter (optional)", value="")
+    st.caption("Analytics mode: embedded in Streamlit using the same backend logic as the FastAPI app.")
 
     st.divider()
     st.subheader("Bulk Ingest")
-    outputs_dir = st.text_input("Outputs root", value="outputs")
+    outputs_dir = st.text_input("Outputs root", value=DEFAULT_OUTPUTS_DIR)
     if st.button("Ingest all runs in outputs"):
         try:
-            ingest_resp = post_json(
-                f"{api_base}/ingest/runs",
-                {"outputs_dir": outputs_dir.strip() or "outputs"},
+            ingest_resp = sync_outputs_to_db(
+                outputs_dir=Path(outputs_dir.strip() or DEFAULT_OUTPUTS_DIR),
+                db_file=DB_FILE,
             )
             st.success(
                 f"Runs ingested: {ingest_resp.get('runs_ingested', 0)} | "
@@ -626,10 +679,16 @@ with st.sidebar:
             st.warning("Provide a run directory path first.")
         else:
             try:
-                ingest_resp = post_json(
-                    f"{api_base}/ingest/run",
-                    {"run_dir": run_dir.strip()},
+                ingest_result = _ingest_run_directory(
+                    run_dir=Path(run_dir.strip()),
+                    model_decisions_file="model_decisions.jsonl",
+                    experiment_requests_file="experiment_requests.jsonl",
+                    db_file=DB_FILE,
                 )
+                ingest_resp = {
+                    "ingested": ingest_result["records_seen"],
+                    "added": ingest_result["records_added"],
+                }
                 st.success(
                     f"Ingested {ingest_resp.get('ingested', 0)} records | "
                     f"Added {ingest_resp.get('added', 0)}"
@@ -638,72 +697,70 @@ with st.sidebar:
             except Exception as exc:
                 st.error(f"Single-run ingest failed: {exc}")
 
+    st.divider()
+    st.subheader("API Surface")
+    st.code("uv run uvicorn app.api.engine_analytics:app --host 0.0.0.0 --port 8000", language="bash")
+    st.caption("The FastAPI app stays in the repo for local demos, client integrations, and presentation samples.")
+
 analytics_tab, runner_tab = st.tabs(["Analytics", "Run Models"])
 
 with analytics_tab:
     render_filter_scope(selected_run, label="Analytics scope")
+    with st.expander("FastAPI sample usage", expanded=False):
+        st.code(
+            """
+curl http://127.0.0.1:8000/metrics/inter-model
 
-    st.subheader("Runs")
+curl "http://127.0.0.1:8000/metrics/conditions-by-model?run_id=run_20260414_103158"
+
+curl -X POST http://127.0.0.1:8000/ingest/runs \\
+  -H "Content-Type: application/json" \\
+  -d '{"outputs_dir":"outputs"}'
+            """.strip(),
+            language="bash",
+        )
+
     try:
-        runs_payload = fetch_json(f"{api_base}/metrics/runs")
-        runs = runs_payload.get("runs", [])
-        if runs:
-            st.code("\n".join(runs))
+        snapshot = get_dashboard_snapshot(selected_run=selected_run, record_limit=50)
+    except Exception as exc:
+        st.error(f"Could not load analytics snapshot: {exc}")
+        snapshot = None
+
+    if snapshot is not None:
+        st.subheader("Runs")
+        if snapshot["runs"]:
+            st.code("\n".join(snapshot["runs"]))
         else:
             st.info("No run IDs found in analytics database yet.")
-    except Exception as exc:
-        st.error(f"Could not load run list: {exc}")
 
-    try:
         render_filter_scope(selected_run, label="Inter-model scope")
-        inter_model_params = {"run_id": selected_run} if selected_run else None
-        inter_model = fetch_json(f"{api_base}/metrics/inter-model", params=inter_model_params)
-        if isinstance(inter_model, dict) and "error" not in inter_model:
+        inter_model = snapshot["inter_model"]
+        if inter_model:
             render_inter_model_overview(inter_model)
             render_inter_model(inter_model)
         else:
             st.info("Inter-model metrics are not available yet.")
-    except Exception as exc:
-        st.error(f"Could not load inter-model metrics: {exc}")
 
-    try:
         render_filter_scope(selected_run, label="Condition comparison scope")
-        condition_rows = fetch_json(
-            f"{api_base}/metrics/conditions-by-model",
-            params={"run_id": selected_run} if selected_run else None,
-        ).get("rows", [])
-        render_condition_metrics_by_model(condition_rows)
-    except Exception as exc:
-        st.error(f"Could not load condition-by-model metrics: {exc}")
+        render_condition_metrics_by_model(snapshot["condition_rows"])
 
-    col1, col2 = st.columns(2)
-    with col1:
-        try:
+        col1, col2 = st.columns(2)
+        with col1:
             render_filter_scope(selected_run, label="Outlet metrics scope")
-            outlet_params = {"run_id": selected_run} if selected_run else None
-            top_outlets = fetch_json(f"{api_base}/metrics/top-outlets-by-model", params=outlet_params).get("rows", [])
-            render_top_outlets(top_outlets)
-        except Exception as exc:
-            st.error(f"Could not load outlet metrics: {exc}")
-    with col2:
-        try:
+            render_top_outlets(snapshot["top_outlets"])
+        with col2:
             render_filter_scope(selected_run, label="Run summary scope")
-            run_rows = fetch_json(f"{api_base}/metrics/run-summaries").get("rows", [])
+            run_rows = snapshot["run_summaries"]
+            if selected_run:
+                run_rows = [row for row in run_rows if row.get("run_id") == selected_run]
             render_run_summaries(run_rows)
-        except Exception as exc:
-            st.error(f"Could not load run summaries: {exc}")
 
-    try:
         render_filter_scope(selected_run, label="Recent records scope")
-        record_params = {"limit": 50}
-        if selected_run:
-            record_params["run_id"] = selected_run
-        records = fetch_json(f"{api_base}/metrics/records", params=record_params).get("rows", [])
-        render_sample_records(records)
-    except Exception as exc:
-        st.error(f"Could not load record samples: {exc}")
+        render_sample_records(snapshot["records"])
 
 with runner_tab:
+    if IS_STREAMLIT_CLOUD:
+        st.info("Community Cloud is configured for the analytics dashboard. Model-running tabs are intended for local use with Ollama.")
     probe_tab, batch_tab = st.tabs(["Probe Model", "Batch Experiment"])
 
     with probe_tab:
@@ -749,7 +806,7 @@ with runner_tab:
         seed = st.number_input("Seed", min_value=0, max_value=1_000_000, value=42, step=1)
         retries = st.number_input("Retries", min_value=0, max_value=10, value=2, step=1)
         shuffle_candidates = st.checkbox("Shuffle candidate order", value=True)
-        auto_ingest = st.checkbox("Auto-ingest run into analytics API", value=True)
+        auto_ingest = st.checkbox("Auto-ingest run into embedded analytics DB", value=True)
 
         if st.button("Run batch experiment"):
             if not condition_values:
@@ -779,10 +836,16 @@ with runner_tab:
 
                     if auto_ingest:
                         try:
-                            ingest_resp = post_json(
-                                f"{api_base}/ingest/run",
-                                {"run_dir": summary["output_dir"]},
+                            ingest_result = _ingest_run_directory(
+                                run_dir=Path(summary["output_dir"]),
+                                model_decisions_file="model_decisions.jsonl",
+                                experiment_requests_file="experiment_requests.jsonl",
+                                db_file=DB_FILE,
                             )
+                            ingest_resp = {
+                                "ingested": ingest_result["records_seen"],
+                                "added": ingest_result["records_added"],
+                            }
                             st.success(
                                 f"Auto-ingest complete: {ingest_resp.get('ingested', 0)} records "
                                 f"(added {ingest_resp.get('added', 0)})"

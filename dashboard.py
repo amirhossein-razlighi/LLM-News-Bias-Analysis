@@ -27,6 +27,7 @@ from app.api.engine_analytics import (
 )
 from app.experiment.condition_builder import build_condition_bundles
 from app.experiment.prompt_builder import build_selection_prompt, selection_response_json_schema
+from app.models.litellm_client import PROVIDER_MODELS, LiteLLMClient
 from app.models.ollama_client import OllamaClient
 from app.parsing.response_parser import parse_model_response
 from app.schemas.models import (
@@ -71,7 +72,8 @@ def get_dashboard_snapshot(selected_run: str = "", record_limit: int = 50) -> di
 
     runs = []
     if not df.empty and "run_id" in df.columns:
-        runs = sorted([r for r in df["run_id"].dropna().astype(str).unique().tolist() if r])
+        runs = sorted(
+            [r for r in df["run_id"].dropna().astype(str).unique().tolist() if r])
 
     return {
         "metrics": metrics,
@@ -147,7 +149,8 @@ def _render_comparison_table(items: list[dict[str, Any]]) -> None:
         )
     if rows:
         st.markdown("**Model-vs-Model Comparisons**")
-        st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+        st.dataframe(pd.DataFrame(rows),
+                     use_container_width=True, hide_index=True)
 
 
 def _safe_float(value: Any, default: float = 0.0) -> float:
@@ -158,10 +161,12 @@ def _safe_float(value: Any, default: float = 0.0) -> float:
 
 
 def _build_snapshot_fallbacks(snapshot: dict[str, Any]) -> dict[str, Any]:
-    per_model_raw = snapshot.get("per_model") if isinstance(snapshot.get("per_model"), list) else []
+    per_model_raw = snapshot.get("per_model") if isinstance(
+        snapshot.get("per_model"), list) else []
     per_model = [row for row in per_model_raw if isinstance(row, dict)]
 
-    best_meta = snapshot.get("best_model_by_composite") if isinstance(snapshot.get("best_model_by_composite"), dict) else {}
+    best_meta = snapshot.get("best_model_by_composite") if isinstance(
+        snapshot.get("best_model_by_composite"), dict) else {}
     best_name = str(best_meta.get("model") or "N/A")
     best_score = _safe_float(best_meta.get("composite_score"), 0.0)
 
@@ -169,9 +174,12 @@ def _build_snapshot_fallbacks(snapshot: dict[str, Any]) -> dict[str, Any]:
     model_count = len(snapshot.get("models", []) or [])
     run_count = len(snapshot.get("runs", []) or [])
 
-    fastest = min(per_model, key=lambda r: _safe_float(r.get("avg_latency_ms"), 10**12)) if per_model else None
-    reliable = max(per_model, key=lambda r: _safe_float(r.get("parse_success_rate"), -1.0)) if per_model else None
-    robust = min(per_model, key=lambda r: _safe_float(r.get("label_sensitivity_rate"), 10**12)) if per_model else None
+    fastest = min(per_model, key=lambda r: _safe_float(
+        r.get("avg_latency_ms"), 10**12)) if per_model else None
+    reliable = max(per_model, key=lambda r: _safe_float(
+        r.get("parse_success_rate"), -1.0)) if per_model else None
+    robust = min(per_model, key=lambda r: _safe_float(
+        r.get("label_sensitivity_rate"), 10**12)) if per_model else None
 
     fallback_highlights = [
         f"Evaluated {record_count} records across {model_count} models and {run_count} runs.",
@@ -287,18 +295,23 @@ def render_llm_summary_section(summary_path: str) -> None:
         )
         return
 
-    llm_summary = payload.get("llm_summary") if isinstance(payload.get("llm_summary"), dict) else {}
-    snapshot = payload.get("snapshot") if isinstance(payload.get("snapshot"), dict) else {}
-    generator = payload.get("generator") if isinstance(payload.get("generator"), dict) else {}
+    llm_summary = payload.get("llm_summary") if isinstance(
+        payload.get("llm_summary"), dict) else {}
+    snapshot = payload.get("snapshot") if isinstance(
+        payload.get("snapshot"), dict) else {}
+    generator = payload.get("generator") if isinstance(
+        payload.get("generator"), dict) else {}
     fallback = _build_snapshot_fallbacks(snapshot)
 
     header_cols = st.columns([2, 1, 1, 1])
-    header_cols[0].markdown(f"**{str(llm_summary.get('headline') or 'Experiment Intelligence Snapshot')}**")
+    header_cols[0].markdown(
+        f"**{str(llm_summary.get('headline') or 'Experiment Intelligence Snapshot')}**")
     header_cols[1].metric("Records", int(snapshot.get("record_count", 0) or 0))
     header_cols[2].metric("Models", len(snapshot.get("models", []) or []))
     header_cols[3].metric("Runs", len(snapshot.get("runs", []) or []))
 
-    best = llm_summary.get("best_model") if isinstance(llm_summary.get("best_model"), dict) else {}
+    best = llm_summary.get("best_model") if isinstance(
+        llm_summary.get("best_model"), dict) else {}
     best_name = str(best.get("name") or fallback["best_name"])
     best_rationale = str(best.get("rationale") or fallback["best_rationale"])
     best_tradeoffs = str(best.get("tradeoffs") or fallback["best_tradeoffs"])
@@ -311,7 +324,8 @@ def render_llm_summary_section(summary_path: str) -> None:
         if best_tradeoffs:
             st.caption(f"Trade-offs: {best_tradeoffs}")
 
-    summary_text = str(llm_summary.get("executive_summary") or fallback["executive_summary"]).strip()
+    summary_text = str(llm_summary.get("executive_summary")
+                       or fallback["executive_summary"]).strip()
 
     with st.container(border=True):
         st.markdown("**Executive Summary**")
@@ -324,31 +338,39 @@ def render_llm_summary_section(summary_path: str) -> None:
     with top_tab:
         c1, c2 = st.columns(2)
         with c1:
-            highlights = llm_summary.get("metric_highlights") or fallback["metric_highlights"]
+            highlights = llm_summary.get(
+                "metric_highlights") or fallback["metric_highlights"]
             _render_bullets("Metric Highlights", [str(x) for x in highlights])
         with c2:
-            comparisons = llm_summary.get("model_comparisons") or fallback["model_comparisons"]
-            _render_comparison_table([x for x in comparisons if isinstance(x, dict)])
+            comparisons = llm_summary.get(
+                "model_comparisons") or fallback["model_comparisons"]
+            _render_comparison_table(
+                [x for x in comparisons if isinstance(x, dict)])
 
     with model_tab:
-        insights_source = llm_summary.get("per_model_insights") or fallback["per_model_insights"]
+        insights_source = llm_summary.get(
+            "per_model_insights") or fallback["per_model_insights"]
         insight_rows = [x for x in insights_source if isinstance(x, dict)]
         _render_insight_cards(insight_rows)
 
     with recommendation_tab:
         with st.container(border=True):
-            recommendations = llm_summary.get("recommendations") or fallback["recommendations"]
-            _render_bullets("Actionable Recommendations", [str(x) for x in recommendations])
+            recommendations = llm_summary.get(
+                "recommendations") or fallback["recommendations"]
+            _render_bullets("Actionable Recommendations", [
+                            str(x) for x in recommendations])
 
     with risk_tab:
         left, right = st.columns(2)
         with left:
             with st.container(border=True):
-                flaws = llm_summary.get("flaws_and_biases") or fallback["flaws_and_biases"]
+                flaws = llm_summary.get(
+                    "flaws_and_biases") or fallback["flaws_and_biases"]
                 _render_bullets("Flaws and Biases", [str(x) for x in flaws])
         with right:
             with st.container(border=True):
-                caveats = llm_summary.get("confidence_and_caveats") or fallback["confidence_and_caveats"]
+                caveats = llm_summary.get(
+                    "confidence_and_caveats") or fallback["confidence_and_caveats"]
                 _render_bullets(
                     "Confidence and Caveats",
                     [str(x) for x in caveats],
@@ -385,16 +407,23 @@ def run_batch_experiment(
     shuffle_candidates: bool,
     progress_bar: Any | None = None,
     status_slot: Any | None = None,
+    provider: str = "ollama",
+    api_keys: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     run_id = datetime.now(timezone.utc).strftime("run_%Y%m%d_%H%M%S")
 
-    incidents = [PreparedIncident.model_validate(row) for row in read_jsonl(input_path)]
+    incidents = [PreparedIncident.model_validate(
+        row) for row in read_jsonl(input_path)]
     conditions = [ConditionName(c) for c in condition_values]
     manifest = load_manifest(models_manifest_path)
-    client = OllamaClient(base_url=ollama_base_url)
+    if provider == "ollama":
+        client = OllamaClient(base_url=ollama_base_url)
+    else:
+        client = LiteLLMClient(api_keys=api_keys)
     response_schema = selection_response_json_schema()
 
-    prepared_runs: list[tuple[PreparedIncident, dict[ConditionName, list[list[Article]]]]] = []
+    prepared_runs: list[tuple[PreparedIncident,
+                              dict[ConditionName, list[list[Article]]]]] = []
     for incident in incidents:
         prepared_runs.append(
             (
@@ -410,7 +439,8 @@ def run_batch_experiment(
         )
 
     total_requests = sum(
-        len(manifest.models) * sum(len(condition_bundles) for condition_bundles in bundles.values())
+        len(manifest.models) * sum(len(condition_bundles)
+                                   for condition_bundles in bundles.values())
         for _, bundles in prepared_runs
     )
     completed = 0
@@ -430,7 +460,8 @@ def run_batch_experiment(
             status_slot.caption(f"Running model {model.name}")
         for incident, bundles in prepared_runs:
             if status_slot is not None:
-                status_slot.caption(f"Running model {model.name} on {incident.incident_id}")
+                status_slot.caption(
+                    f"Running model {model.name} on {incident.incident_id}")
             for condition, condition_bundles in bundles.items():
                 for bundle_idx, candidates in enumerate(condition_bundles, start=1):
                     request_id = str(uuid4())
@@ -451,7 +482,8 @@ def run_batch_experiment(
                     )
 
                     request_record = request.model_dump(mode="json")
-                    request_record["candidate_order"] = [c.article_id for c in candidates]
+                    request_record["candidate_order"] = [
+                        c.article_id for c in candidates]
                     append_jsonl(requests_path, request_record)
                     request_count += 1
 
@@ -468,7 +500,8 @@ def run_batch_experiment(
                         )
                         parsed = parse_model_response(
                             text=generation.text,
-                            allowed_article_ids={c.article_id for c in candidates},
+                            allowed_article_ids={
+                                c.article_id for c in candidates},
                         )
 
                         raw_record = {
@@ -513,11 +546,13 @@ def run_batch_experiment(
                             latency_ms=None,
                         )
 
-                    append_jsonl(decisions_path, decision.model_dump(mode="json"))
+                    append_jsonl(decisions_path,
+                                 decision.model_dump(mode="json"))
                     decision_count += 1
                     completed += 1
                     if progress_bar is not None and total_requests:
-                        progress_bar.progress(completed / total_requests, text=f"{completed}/{total_requests} requests")
+                        progress_bar.progress(
+                            completed / total_requests, text=f"{completed}/{total_requests} requests")
 
     return {
         "run_id": run_id,
@@ -534,12 +569,15 @@ def metrics_cards(metrics: dict[str, Any], total_count: int) -> None:
     c2.metric("Parse Success", f"{metrics.get('parse_success_rate', 0.0):.1%}")
     c3.metric("Avg Latency", f"{metrics.get('avg_latency_ms', 0.0):.0f} ms")
     c4.metric("P95 Latency", f"{metrics.get('p95_latency_ms', 0.0):.0f} ms")
-    c5.metric("Center Preference", f"{metrics.get('center_preference_index', 0.0):.3f}")
-    c6.metric("Robustness", f"{metrics.get('content_robustness_score', 0.0):.3f}")
+    c5.metric("Center Preference",
+              f"{metrics.get('center_preference_index', 0.0):.3f}")
+    c6.metric("Robustness",
+              f"{metrics.get('content_robustness_score', 0.0):.3f}")
 
 
 def takeaway_panel(metrics: dict[str, Any]) -> None:
-    bias_sensitivity_index = float(metrics.get("label_sensitivity_rate", metrics.get("identity_dominance_rate", 0.0)))
+    bias_sensitivity_index = float(metrics.get(
+        "label_sensitivity_rate", metrics.get("identity_dominance_rate", 0.0)))
     reliability_index = float(metrics.get("parse_success_rate", 0.0))
     avg_latency = float(metrics.get("avg_latency_ms", 0.0))
     speed_index = 1.0 / (1.0 + max(0.0, avg_latency) / 1000.0)
@@ -579,7 +617,8 @@ def render_distribution_charts(metrics: dict[str, Any]) -> None:
             y="ratio",
             title="Selection Distribution",
             color="bucket",
-            color_discrete_sequence=["#3366CC", "#109618", "#DC3912", "#FF9900"],
+            color_discrete_sequence=["#3366CC",
+                                     "#109618", "#DC3912", "#FF9900"],
         )
         fig.update_layout(yaxis_tickformat=".0%")
         st.plotly_chart(fig, use_container_width=True)
@@ -654,16 +693,19 @@ def render_inter_model_overview(inter_model_data: dict[str, Any]) -> None:
         key="best_model_objective",
     )
     sort_col, ascending = objective_options[objective]
-    ranking_columns = ["model", sort_col, "parse_success_rate", "avg_latency_ms", "content_robustness_score"]
+    ranking_columns = ["model", sort_col, "parse_success_rate",
+                       "avg_latency_ms", "content_robustness_score"]
     # Keep stable order while removing duplicates to avoid non-unique label errors in sort_values.
     ranking_columns = list(dict.fromkeys(ranking_columns))
-    ranking = inter_df[ranking_columns].sort_values(sort_col, ascending=ascending)
+    ranking = inter_df[ranking_columns].sort_values(
+        sort_col, ascending=ascending)
     st.markdown("**Objective Ranking**")
     st.dataframe(ranking, use_container_width=True, hide_index=True)
 
 
 def _overlap_score(incident_id: str, reason: str) -> float:
-    incident_tokens = [t for t in re.split(r"[_\W]+", str(incident_id).lower()) if len(t) >= 4]
+    incident_tokens = [t for t in re.split(
+        r"[_\W]+", str(incident_id).lower()) if len(t) >= 4]
     if not incident_tokens:
         return 0.0
     reason_tokens = set(re.findall(r"[a-zA-Z]{4,}", str(reason).lower()))
@@ -681,11 +723,15 @@ def render_scenario_simulator(selected_run: str) -> None:
         return
 
     st.subheader("Scenario Simulator")
-    incidents = sorted(df["incident_id"].dropna().astype(str).unique().tolist())
-    incident_id = st.selectbox("Incident", options=incidents, key="scenario_incident")
+    incidents = sorted(
+        df["incident_id"].dropna().astype(str).unique().tolist())
+    incident_id = st.selectbox(
+        "Incident", options=incidents, key="scenario_incident")
     incident_df = df[df["incident_id"] == incident_id].copy()
-    conditions = sorted(incident_df["condition"].dropna().astype(str).unique().tolist())
-    condition = st.selectbox("Condition", options=conditions, key="scenario_condition")
+    conditions = sorted(
+        incident_df["condition"].dropna().astype(str).unique().tolist())
+    condition = st.selectbox(
+        "Condition", options=conditions, key="scenario_condition")
     scoped = incident_df[incident_df["condition"] == condition].copy()
 
     if scoped.empty:
@@ -706,7 +752,8 @@ def render_scenario_simulator(selected_run: str) -> None:
             color="selected_bucket",
             barmode="group",
             title="Selected Leaning by Model for Scenario",
-            color_discrete_map={"left": "#d62728", "center": "#2ca02c", "right": "#1f77b4"},
+            color_discrete_map={"left": "#d62728",
+                                "center": "#2ca02c", "right": "#1f77b4"},
         )
         st.plotly_chart(fig, use_container_width=True)
 
@@ -719,7 +766,8 @@ def render_scenario_simulator(selected_run: str) -> None:
         "parse_status",
         "latency_ms",
     ]].copy()
-    explain["reason_excerpt"] = explain["justification"].fillna("").astype(str).str.slice(0, 180)
+    explain["reason_excerpt"] = explain["justification"].fillna(
+        "").astype(str).str.slice(0, 180)
     explain["keyword_overlap"] = explain.apply(
         lambda row: _overlap_score(incident_id, row.get("justification", "")),
         axis=1,
@@ -731,8 +779,10 @@ def render_scenario_simulator(selected_run: str) -> None:
 
 def render_metrics_explanations() -> None:
     st.subheader("Metrics Explanations")
-    st.caption("Short, precise definitions for every metric shown in this dashboard.")
-    st.caption("Direction legend: ⬆ means higher is better, ⬇ means lower is better.")
+    st.caption(
+        "Short, precise definitions for every metric shown in this dashboard.")
+    st.caption(
+        "Direction legend: ⬆ means higher is better, ⬇ means lower is better.")
 
     core_rows = [
         {
@@ -863,7 +913,8 @@ def render_metrics_explanations() -> None:
         },
     ]
     st.markdown("**Core Metrics**")
-    st.dataframe(pd.DataFrame(core_rows), use_container_width=True, hide_index=True)
+    st.dataframe(pd.DataFrame(core_rows),
+                 use_container_width=True, hide_index=True)
 
     condition_rows = [
         {
@@ -892,7 +943,8 @@ def render_metrics_explanations() -> None:
         },
     ]
     st.markdown("**Condition-Level Metrics**")
-    st.dataframe(pd.DataFrame(condition_rows), use_container_width=True, hide_index=True)
+    st.dataframe(pd.DataFrame(condition_rows),
+                 use_container_width=True, hide_index=True)
 
     run_rows = [
         {
@@ -915,7 +967,8 @@ def render_metrics_explanations() -> None:
         },
     ]
     st.markdown("**Coverage / Summary Metrics**")
-    st.dataframe(pd.DataFrame(run_rows), use_container_width=True, hide_index=True)
+    st.dataframe(pd.DataFrame(run_rows),
+                 use_container_width=True, hide_index=True)
 
     st.markdown("**Condition Labels Used Internally**")
     st.markdown(
@@ -960,8 +1013,10 @@ def render_condition_metrics_by_model(rows: list[dict[str, Any]]) -> None:
         var_name="bucket",
         value_name="ratio",
     )
-    heatmap_df["bucket"] = heatmap_df["bucket"].str.replace("_ratio", "", regex=False)
-    heatmap_df["condition_label"] = heatmap_df["condition"].map(condition_labels)
+    heatmap_df["bucket"] = heatmap_df["bucket"].str.replace(
+        "_ratio", "", regex=False)
+    heatmap_df["condition_label"] = heatmap_df["condition"].map(
+        condition_labels)
     heatmap_df["bucket_label"] = heatmap_df["bucket"].map(bucket_labels)
 
     st.markdown("**Overview Grid**")
@@ -1015,7 +1070,8 @@ def render_condition_metrics_by_model(rows: list[dict[str, Any]]) -> None:
         .fillna(0.0)
     )
 
-    heatmap_tab, distribution_tab, quality_tab = st.tabs(["Heatmap", "Distribution", "Quality"])
+    heatmap_tab, distribution_tab, quality_tab = st.tabs(
+        ["Heatmap", "Distribution", "Quality"])
     with heatmap_tab:
         fig = px.imshow(
             focused_pivot,
@@ -1032,7 +1088,8 @@ def render_condition_metrics_by_model(rows: list[dict[str, Any]]) -> None:
             coloraxis_colorbar_title="ratio",
         )
         fig.update_xaxes(title=None, side="bottom", tickangle=0)
-        fig.update_yaxes(title="Condition", automargin=True, tickfont=dict(size=14))
+        fig.update_yaxes(title="Condition", automargin=True,
+                         tickfont=dict(size=14))
         st.plotly_chart(fig, use_container_width=True)
 
     with distribution_tab:
@@ -1053,12 +1110,16 @@ def render_condition_metrics_by_model(rows: list[dict[str, Any]]) -> None:
 
     with quality_tab:
         quality_df = focused_df[
-            ["condition", "parse_success_rate", "avg_latency_ms", "p95_latency_ms", "unknown_ratio"]
+            ["condition", "parse_success_rate", "avg_latency_ms",
+                "p95_latency_ms", "unknown_ratio"]
         ].copy()
-        quality_df["parse_success_rate"] = quality_df["parse_success_rate"].fillna(0.0)
+        quality_df["parse_success_rate"] = quality_df["parse_success_rate"].fillna(
+            0.0)
         quality_df["unknown_ratio"] = quality_df["unknown_ratio"].fillna(0.0)
-        quality_df = quality_df.set_index("condition").reindex(condition_order).reset_index()
-        quality_df["condition_label"] = quality_df["condition"].map(condition_labels)
+        quality_df = quality_df.set_index(
+            "condition").reindex(condition_order).reset_index()
+        quality_df["condition_label"] = quality_df["condition"].map(
+            condition_labels)
 
         qcol1, qcol2 = st.columns(2)
         with qcol1:
@@ -1248,10 +1309,37 @@ st.title("Sourcerers Analytics Dashboard")
 
 with st.sidebar:
     st.header("Settings")
-    ollama_base = st.text_input("Ollama Base URL", value=DEFAULT_OLLAMA_BASE).rstrip("/")
+    ollama_base = st.text_input(
+        "Ollama Base URL", value=DEFAULT_OLLAMA_BASE).rstrip("/")
     selected_run = st.text_input("Run filter (optional)", value="")
-    st.caption("Analytics mode: embedded in Streamlit using the same backend logic as the FastAPI app.")
-    llm_summary_path = st.text_input("LLM summary file", value="outputs/llm_dashboard_summary.json")
+    st.caption(
+        "Analytics mode: embedded in Streamlit using the same backend logic as the FastAPI app.")
+    llm_summary_path = st.text_input(
+        "LLM summary file", value="outputs/llm_dashboard_summary.json")
+
+    st.divider()
+    st.subheader("Commercial Model API Keys")
+    with st.expander("Configure API keys for commercial LLMs", expanded=False):
+        st.caption("Keys are stored in memory only and never written to disk.")
+        _openai_key = st.text_input(
+            "OpenAI API Key", type="password", key="openai_api_key", value="")
+        _anthropic_key = st.text_input(
+            "Anthropic API Key", type="password", key="anthropic_api_key", value="")
+        _google_key = st.text_input(
+            "Google (Gemini) API Key", type="password", key="google_api_key", value="")
+        _configured_providers = [p for p, k in {
+            "openai": _openai_key, "anthropic": _anthropic_key, "google": _google_key}.items() if k]
+        if _configured_providers:
+            st.caption(f"Configured: {', '.join(_configured_providers)}")
+        else:
+            st.caption("No commercial API keys configured.")
+
+    def _get_api_keys() -> dict[str, str]:
+        return {
+            "openai": st.session_state.get("openai_api_key", ""),
+            "anthropic": st.session_state.get("anthropic_api_key", ""),
+            "google": st.session_state.get("google_api_key", ""),
+        }
 
     st.divider()
     st.subheader("Bulk Ingest")
@@ -1298,11 +1386,13 @@ with st.sidebar:
     st.divider()
     st.subheader("API Surface")
     st.code("uv run uvicorn app.api.engine_analytics:app --host 0.0.0.0 --port 8000", language="bash")
-    st.caption("The FastAPI app stays in the repo for local demos, client integrations, and presentation samples.")
+    st.caption(
+        "The FastAPI app stays in the repo for local demos, client integrations, and presentation samples.")
 
 render_llm_summary_section(llm_summary_path)
 
-analytics_tab, runner_tab, explainer_tab = st.tabs(["Analytics", "Run Models", "Metrics explanations"])
+analytics_tab, runner_tab, explainer_tab = st.tabs(
+    ["Analytics", "Run Models", "Metrics explanations"])
 
 with analytics_tab:
     render_filter_scope(selected_run, label="Analytics scope")
@@ -1321,7 +1411,8 @@ curl -X POST http://127.0.0.1:8000/ingest/runs \\
         )
 
     try:
-        snapshot = get_dashboard_snapshot(selected_run=selected_run, record_limit=50)
+        snapshot = get_dashboard_snapshot(
+            selected_run=selected_run, record_limit=50)
     except Exception as exc:
         st.error(f"Could not load analytics snapshot: {exc}")
         snapshot = None
@@ -1359,7 +1450,8 @@ curl -X POST http://127.0.0.1:8000/ingest/runs \\
             render_filter_scope(selected_run, label="Run summary scope")
             run_rows = snapshot["run_summaries"]
             if selected_run:
-                run_rows = [row for row in run_rows if row.get("run_id") == selected_run]
+                run_rows = [row for row in run_rows if row.get(
+                    "run_id") == selected_run]
             render_run_summaries(run_rows)
 
         render_filter_scope(selected_run, label="Recent records scope")
@@ -1373,37 +1465,105 @@ with runner_tab:
     probe_tab, batch_tab = st.tabs(["Probe Model", "Batch Experiment"])
 
     with probe_tab:
-        st.write("Run a single prompt against an Ollama model using the project client.")
-        probe_model = st.text_input("Model name", value="qwen2.5:7b")
+        st.write(
+            "Run a single prompt against a local Ollama model or a commercial LLM.")
+        probe_provider = st.selectbox(
+            "Provider",
+            options=["ollama", "openai", "anthropic", "google"],
+            index=0,
+            key="probe_provider",
+        )
+
+        if probe_provider == "ollama":
+            probe_model = st.text_input(
+                "Model name", value="qwen2.5:7b", key="probe_model_name")
+        else:
+            _api_keys = _get_api_keys()
+            _provider_key = _api_keys.get(probe_provider, "")
+            if not _provider_key:
+                st.warning(
+                    f"No API key configured for **{probe_provider}**. Add one in the sidebar under *Commercial Model API Keys*.")
+            available_models = PROVIDER_MODELS.get(probe_provider, [])
+            probe_model = st.selectbox(
+                "Model",
+                options=available_models,
+                index=0 if available_models else 0,
+                key="probe_model_select",
+            )
+
         probe_prompt = st.text_area(
             "Prompt",
             value="Return strict JSON with selected_article_id and reason.",
             height=140,
         )
-        probe_temperature = st.number_input("Temperature", min_value=0.0, max_value=2.0, value=0.0, step=0.1)
-        probe_max_tokens = st.number_input("Max tokens", min_value=1, max_value=4096, value=300, step=50)
-        probe_timeout = st.number_input("Timeout seconds", min_value=1, max_value=300, value=60, step=5)
+        probe_temperature = st.number_input(
+            "Temperature", min_value=0.0, max_value=2.0, value=0.0, step=0.1)
+        probe_max_tokens = st.number_input(
+            "Max tokens", min_value=1, max_value=4096, value=300, step=50)
+        probe_timeout = st.number_input(
+            "Timeout seconds", min_value=1, max_value=300, value=60, step=5)
 
         if st.button("Run probe"):
+            if probe_provider != "ollama":
+                _api_keys = _get_api_keys()
+                _provider_key = _api_keys.get(probe_provider, "")
+                if not _provider_key:
+                    st.error(
+                        f"Cannot run probe: no API key for **{probe_provider}**.")
+                    st.stop()
             try:
-                with st.spinner("Calling Ollama..."):
-                    generation = OllamaClient(base_url=ollama_base).generate(
-                        model=probe_model,
-                        prompt=probe_prompt,
-                        temperature=float(probe_temperature),
-                        max_tokens=int(probe_max_tokens),
-                        timeout_seconds=int(probe_timeout),
-                    )
+                spinner_label = f"Calling {probe_provider}..."
+                with st.spinner(spinner_label):
+                    if probe_provider == "ollama":
+                        generation = OllamaClient(base_url=ollama_base).generate(
+                            model=probe_model,
+                            prompt=probe_prompt,
+                            temperature=float(probe_temperature),
+                            max_tokens=int(probe_max_tokens),
+                            timeout_seconds=int(probe_timeout),
+                        )
+                    else:
+                        generation = LiteLLMClient(api_keys=_get_api_keys()).generate(
+                            model=probe_model,
+                            prompt=probe_prompt,
+                            temperature=float(probe_temperature),
+                            max_tokens=int(probe_max_tokens),
+                            timeout_seconds=int(probe_timeout),
+                        )
                 st.success(f"Latency: {generation.latency_ms} ms")
-                st.text_area("Model response", value=generation.text, height=220)
+                st.text_area("Model response",
+                             value=generation.text, height=220)
                 st.expander("Raw payload").json(generation.raw_payload)
             except Exception as exc:
                 st.error(f"Probe failed: {exc}")
 
     with batch_tab:
-        st.write("Run the full experiment pipeline using existing builders, parser, and schemas.")
-        input_path = st.text_input("Input incidents JSONL", value="data/real_incidents_all.jsonl")
-        manifest_path = st.text_input("Models manifest YAML", value="configs/models.example.yaml")
+        st.write(
+            "Run the full experiment pipeline using existing builders, parser, and schemas.")
+        batch_provider = st.selectbox(
+            "Provider",
+            options=["ollama", "openai", "anthropic", "google"],
+            index=0,
+            key="batch_provider",
+        )
+        if batch_provider != "ollama":
+            _batch_api_keys = _get_api_keys()
+            _batch_provider_key = _batch_api_keys.get(batch_provider, "")
+            if not _batch_provider_key:
+                st.warning(
+                    f"No API key configured for **{batch_provider}**. Add one in the sidebar under *Commercial Model API Keys*.")
+            _example_models = PROVIDER_MODELS.get(batch_provider, [""])
+            st.info(
+                f"Commercial provider selected. Each `name:` entry in your manifest YAML must be "
+                f"a model identifier that LiteLLM recognises for **{batch_provider}**.\n\n"
+                f"Supported examples for {batch_provider}: "
+                + ", ".join(f"`{m}`" for m in _example_models)
+            )
+
+        input_path = st.text_input(
+            "Input incidents JSONL", value="data/real_incidents_all.jsonl")
+        manifest_path = st.text_input(
+            "Models manifest YAML", value="configs/models.example.yaml")
         output_root = st.text_input("Output root", value="outputs")
 
         condition_values = st.multiselect(
@@ -1411,15 +1571,22 @@ with runner_tab:
             options=[c.value for c in ConditionName],
             default=[c.value for c in ConditionName],
         )
-        max_combinations = st.number_input("Max combinations", min_value=1, max_value=50, value=3, step=1)
-        seed = st.number_input("Seed", min_value=0, max_value=1_000_000, value=42, step=1)
-        retries = st.number_input("Retries", min_value=0, max_value=10, value=2, step=1)
+        max_combinations = st.number_input(
+            "Max combinations", min_value=1, max_value=50, value=3, step=1)
+        seed = st.number_input("Seed", min_value=0,
+                               max_value=1_000_000, value=42, step=1)
+        retries = st.number_input(
+            "Retries", min_value=0, max_value=10, value=2, step=1)
         shuffle_candidates = st.checkbox("Shuffle candidate order", value=True)
-        auto_ingest = st.checkbox("Auto-ingest run into embedded analytics DB", value=True)
+        auto_ingest = st.checkbox(
+            "Auto-ingest run into embedded analytics DB", value=True)
 
         if st.button("Run batch experiment"):
             if not condition_values:
                 st.warning("Select at least one condition.")
+            elif batch_provider != "ollama" and not _get_api_keys().get(batch_provider, ""):
+                st.error(
+                    f"Cannot run batch: no API key for **{batch_provider}**.")
             else:
                 try:
                     progress_bar = st.progress(0.0, text="Starting run")
@@ -1437,6 +1604,8 @@ with runner_tab:
                             shuffle_candidates=shuffle_candidates,
                             progress_bar=progress_bar,
                             status_slot=status_slot,
+                            provider=batch_provider,
+                            api_keys=_get_api_keys(),
                         )
                     progress_bar.progress(1.0, text="Completed")
                     status_slot.caption(f"Run finished: {summary['run_id']}")
@@ -1461,7 +1630,8 @@ with runner_tab:
                             )
                             st.cache_data.clear()
                         except Exception as exc:
-                            st.warning(f"Run completed but auto-ingest failed: {exc}")
+                            st.warning(
+                                f"Run completed but auto-ingest failed: {exc}")
                 except Exception as exc:
                     st.error(f"Batch run failed: {exc}")
 

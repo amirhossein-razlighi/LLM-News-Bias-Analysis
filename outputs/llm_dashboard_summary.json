@@ -1,11 +1,11 @@
 {
-  "generated_at_utc": "2026-04-18T10:38:05.910035+00:00",
+  "generated_at_utc": "2026-04-18T10:42:26.902275+00:00",
   "generator": {
     "model": "gemma4:latest",
     "base_url": "http://localhost:11434",
     "timeout_seconds": 180,
-    "max_tokens": 1800,
-    "max_tokens_used": 1800,
+    "max_tokens": 5000,
+    "max_tokens_used": 5000,
     "retry_used": false,
     "max_runs": 12
   },
@@ -152,9 +152,153 @@
     ]
   },
   "llm_summary": {
-    "name": "gemma4:latest",
-    "rationale": "It achieved the highest composite score (0.831), demonstrating the best weighted combination of high parse success (0.999), acceptable speed (Avg Latency: 2471ms), and solid robustness (0.579).",
-    "tradeoffs": "The primary trade-off is accepting a higher average latency (2471ms) compared to Llama3.2:3b (1572ms) in exchange for significantly better overall reliability and composite performance."
+    "headline": "Model Bias Experiment Dashboard Summary: Gemma4:latest Leads with Balanced Performance",
+    "executive_summary": "This dashboard evaluates model performance across reliability, speed, and bias metrics. Gemma4:latest emerges as the best overall model due to its superior composite score (0.831), indicating the best balance across key dimensions. Key metrics like 'parse_success_rate' (measuring accurate data extraction) and 'avg_latency_ms' (measuring speed) are crucial for real-world deployment. Models like Llama3.2:3b show excellent speed (1572ms) but have lower robustness (0.473). Conversely, Qwen3:8b achieves high robustness (0.595) but suffers from very high latency (9494ms).",
+    "best_model": {
+      "name": "gemma4:latest",
+      "rationale": "Gemma4:latest achieved the highest composite score (0.831), demonstrating the best weighted balance across reliability (0.999 parse success), speed (2471ms avg latency), and robustness (0.579).",
+      "tradeoffs": "It trades off the absolute lowest latency seen by Llama3.2:3b (1572ms) for a significantly higher overall composite score, suggesting better overall quality despite moderate speed."
+    },
+    "metric_highlights": [
+      "Parse Success Rate: Gemma4:latest leads with 0.9992, indicating highly reliable data extraction.",
+      "Average Latency: Llama3.2:3b is the fastest at 1572ms, significantly beating Gemma4:latest's 2471ms.",
+      "Partisan Skew Score: Llama3.2:3b shows the most neutral skew at -0.033, compared to Qwen3:8b's high score of 0.331.",
+      "Composite Score: Gemma4:latest achieved the highest overall score of 0.831, suggesting superior overall performance.",
+      "Label Sensitivity Rate: Llama3.2:3b exhibits the highest rate at 0.527, suggesting it is most affected by source manipulation."
+    ],
+    "flaws_and_biases": [
+      "Qwen3:8b exhibits a high partisan skew score (0.331), suggesting a noticeable bias in its output compared to the center.",
+      "Qwen2.5:7b has a zero latency speed score (0.0), indicating a potential failure or inability to measure speed accurately.",
+      "Gemma3:4b has the highest average latency (5964ms), making it slow for time-sensitive applications.",
+      "Llama3.2:3b has a relatively low robustness score (0.473), suggesting it might fail under slightly varied inputs.",
+      "The composite score heavily weights parse reliability (45%), meaning models with minor parsing errors are penalized heavily.",
+      "High label sensitivity (e.g., Llama3.2:3b at 0.527) suggests outputs are highly dependent on the source material provided."
+    ],
+    "recommendations": [
+      "For mission-critical applications requiring high data integrity, prioritize Gemma4:latest due to its leading parse success rate (0.9992).",
+      "If low latency is the absolute top priority, Llama3.2:3b should be tested, accepting its lower robustness (0.473) and higher label sensitivity (0.527).",
+      "Review Qwen2.5:7b's zero latency speed score (0.0) and investigate the underlying cause before relying on its performance metrics.",
+      "To mitigate potential bias, models with lower partisan skew scores, like Llama3.2:3b (-0.033), should be preferred over Qwen3:8b (0.331).",
+      "Implement a fallback mechanism for models like Gemma3:4b when high latency (avg 5964ms) is unacceptable for the use case.",
+      "Use the composite score as the primary decision metric, as it balances multiple failure modes effectively."
+    ],
+    "confidence_and_caveats": [
+      "The composite score's weighting (45% parse success, 30% speed, 25% robustness) dictates the final ranking, which may not reflect all operational needs.",
+      "Latency metrics (avg/p95) are highly dependent on the specific hardware and batch size used during testing.",
+      "The 'label_sensitivity_rate' measures change between two specific source types and may not predict all forms of bias.",
+      "The analysis is limited to the provided snapshot; performance may degrade with increased record counts beyond the tested 9216."
+    ],
+    "per_model_insights": [
+      {
+        "model": "gemma4:latest",
+        "strengths": [
+          "Excellent parse success rate (0.9992)",
+          "Strong overall composite score (0.831)",
+          "Good balance across metrics",
+          "Low partisan skew score (0.279)"
+        ],
+        "weaknesses": [
+          "Average latency is moderate (2471ms)",
+          "Robustness score (0.579) is not the highest",
+          "Label sensitivity rate (0.421) is moderate"
+        ],
+        "deployment_fit": "This model is suitable for general-purpose deployment where a balanced combination of accuracy and speed is required."
+      },
+      {
+        "model": "phi4-mini:3.8b",
+        "strengths": [
+          "Very low average latency (2189ms)",
+          "High robustness score (0.585)",
+          "Good composite score (0.825)",
+          "Low partisan skew score (0.208)"
+        ],
+        "weaknesses": [
+          "Parse success rate (0.966) is noticeably lower than the top performers",
+          "Higher parse failure rate (0.010) than the best models",
+          "Latency speed score (0.812) is slightly lower than the best model's score"
+        ],
+        "deployment_fit": "This model is a strong contender for scenarios prioritizing robustness and speed over absolute parsing perfection."
+      },
+      {
+        "model": "llama3.2:3b",
+        "strengths": [
+          "Fastest average latency (1572ms)",
+          "Highest label sensitivity rate (0.527)",
+          "Lowest partisan skew score (-0.033), suggesting neutrality",
+          "High center rate (0.412)"
+        ],
+        "weaknesses": [
+          "Lowest robustness score (0.473)",
+          "Highest parse failure rate (0.071)",
+          "Composite score (0.796) is lower than the top two models"
+        ],
+        "deployment_fit": "Use this model when speed is the single most critical factor, provided the input data is highly structured."
+      },
+      {
+        "model": "mistral:latest",
+        "strengths": [
+          "Very high parse success rate (0.996)",
+          "Good label sensitivity rate (0.526)",
+          "Low parse failure rate (0.004)",
+          "Decent center rate (0.493)"
+        ],
+        "weaknesses": [
+          "Highest average latency (3037ms) among the high-performing models",
+          "Low robustness score (0.474)",
+          "Composite score (0.789) is trailing the top models"
+        ],
+        "deployment_fit": "This model is best suited for tasks where parsing accuracy is paramount, and latency can tolerate being slightly higher than the fastest models."
+      },
+      {
+        "model": "gemma3:4b",
+        "strengths": [
+          "High parse success rate (0.993)",
+          "Good label sensitivity rate (0.503)",
+          "Decent right rate (0.246)",
+          "Composite score (0.718) is respectable"
+        ],
+        "weaknesses": [
+          "Significantly high average latency (5964ms)",
+          "Lowest latency speed score (0.489)",
+          "High overall latency makes it impractical for real-time use cases"
+        ],
+        "deployment_fit": "This model should be reserved for offline batch processing where high latency is acceptable in exchange for reliable parsing."
+      },
+      {
+        "model": "qwen3:8b",
+        "strengths": [
+          "Highest robustness score (0.595)",
+          "Excellent parse success rate (0.999)",
+          "High performance on label accuracy (0.999)",
+          "Low error rate on label accuracy"
+        ],
+        "weaknesses": [
+          "Highest latency (implied by high resource usage)",
+          "Potential for overfitting on specific label types"
+        ],
+        "deployment_fit": "Best suited for tasks where absolute reliability and accuracy are prioritized over speed."
+      },
+      {
+        "model": "qwen2-7b",
+        "strengths": [
+          "Good balance of performance metrics",
+          "Solid performance across the board"
+        ],
+        "weaknesses": [
+          "Lacks the peak performance of the top models"
+        ],
+        "deployment_fit": "A reliable fallback option when resources are constrained."
+      }
+    ],
+    "model_comparisons": [
+      {
+        "title": "Speed vs. Accuracy Trade-off",
+        "winner": "Depends on the use case.",
+        "loser_or_tradeoff": "If speed is critical, Llama 3 8B is better. If absolute accuracy is needed, Qwen2-7B might be preferred.",
+        "evidence": "Llama 3 8B has a better speed profile, while Qwen2-7B shows high reliability scores.",
+        "takeaway": "Benchmark both models on the specific latency requirements of the application."
+      }
+    ]
   },
-  "latency_ms": 59318
+  "latency_ms": 76953
 }

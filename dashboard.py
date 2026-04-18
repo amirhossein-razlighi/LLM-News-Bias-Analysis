@@ -3,7 +3,6 @@ from __future__ import annotations
 import json
 import os
 import re
-import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -98,12 +97,6 @@ def load_llm_summary_file(summary_path: str) -> dict[str, Any] | None:
     return payload
 
 
-def _stream_chars(text: str, delay_seconds: float = 0.003) -> Any:
-    for ch in text:
-        yield ch
-        time.sleep(delay_seconds)
-
-
 def _render_bullets(title: str, items: list[str]) -> None:
     if not items:
         return
@@ -157,6 +150,132 @@ def _render_comparison_table(items: list[dict[str, Any]]) -> None:
         st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
 
 
+def _safe_float(value: Any, default: float = 0.0) -> float:
+    try:
+        return float(value)
+    except Exception:
+        return default
+
+
+def _build_snapshot_fallbacks(snapshot: dict[str, Any]) -> dict[str, Any]:
+    per_model_raw = snapshot.get("per_model") if isinstance(snapshot.get("per_model"), list) else []
+    per_model = [row for row in per_model_raw if isinstance(row, dict)]
+
+    best_meta = snapshot.get("best_model_by_composite") if isinstance(snapshot.get("best_model_by_composite"), dict) else {}
+    best_name = str(best_meta.get("model") or "N/A")
+    best_score = _safe_float(best_meta.get("composite_score"), 0.0)
+
+    record_count = int(snapshot.get("record_count", 0) or 0)
+    model_count = len(snapshot.get("models", []) or [])
+    run_count = len(snapshot.get("runs", []) or [])
+
+    fastest = min(per_model, key=lambda r: _safe_float(r.get("avg_latency_ms"), 10**12)) if per_model else None
+    reliable = max(per_model, key=lambda r: _safe_float(r.get("parse_success_rate"), -1.0)) if per_model else None
+    robust = min(per_model, key=lambda r: _safe_float(r.get("label_sensitivity_rate"), 10**12)) if per_model else None
+
+    fallback_highlights = [
+        f"Evaluated {record_count} records across {model_count} models and {run_count} runs.",
+        f"Best composite model: {best_name} (score {best_score:.3f}).",
+    ]
+    if reliable is not None:
+        fallback_highlights.append(
+            f"Most reliable parser: {str(reliable.get('model') or 'N/A')} with parse success {_safe_float(reliable.get('parse_success_rate')):.2%}."
+        )
+    if fastest is not None:
+        fallback_highlights.append(
+            f"Fastest model: {str(fastest.get('model') or 'N/A')} at avg latency {_safe_float(fastest.get('avg_latency_ms')):.0f} ms."
+        )
+
+    fallback_recommendations = [
+        "Use the composite winner for balanced production behavior.",
+        "If latency is critical, prioritize the fastest model and monitor parse reliability.",
+        "Track label sensitivity and skew over time to detect drift.",
+        "Re-run summary after each major experiment batch.",
+    ]
+
+    fallback_risks = [
+        "Composite ranking depends on weighting choices.",
+        "Bias metrics are proxy signals, not full fairness audits.",
+        "Latency depends on hardware and runtime load.",
+        "Some qualitative failure modes require manual review.",
+    ]
+
+    fallback_insights: list[dict[str, Any]] = []
+    for row in per_model:
+        model = str(row.get("model") or "unknown")
+        parse_rate = _safe_float(row.get("parse_success_rate"))
+        latency = _safe_float(row.get("avg_latency_ms"))
+        sensitivity = _safe_float(row.get("label_sensitivity_rate"))
+        skew = _safe_float(row.get("partisan_skew_score"))
+        fallback_insights.append(
+            {
+                "model": model,
+                "strengths": [
+                    f"Parse success {parse_rate:.2%}",
+                    f"Average latency {latency:.0f} ms",
+                ],
+                "weaknesses": [
+                    f"Label sensitivity {sensitivity:.3f}",
+                    f"Partisan skew score {skew:.3f}",
+                ],
+                "deployment_fit": "Use when this model's latency-reliability profile matches product constraints.",
+            }
+        )
+
+    fallback_comparisons: list[dict[str, Any]] = []
+    if reliable is not None:
+        fallback_comparisons.append(
+            {
+                "title": "Reliability leader",
+                "winner": str(reliable.get("model") or "N/A"),
+                "loser_or_tradeoff": "Other models have lower parse success",
+                "evidence": f"parse_success_rate={_safe_float(reliable.get('parse_success_rate')):.2%}",
+                "takeaway": "Use for automation paths where structured parsing robustness matters most.",
+            }
+        )
+    if fastest is not None:
+        fallback_comparisons.append(
+            {
+                "title": "Latency leader",
+                "winner": str(fastest.get("model") or "N/A"),
+                "loser_or_tradeoff": "Other models are slower",
+                "evidence": f"avg_latency_ms={_safe_float(fastest.get('avg_latency_ms')):.0f}",
+                "takeaway": "Use for low-latency experiences if reliability remains acceptable.",
+            }
+        )
+    if robust is not None:
+        fallback_comparisons.append(
+            {
+                "title": "Robustness leader",
+                "winner": str(robust.get("model") or "N/A"),
+                "loser_or_tradeoff": "Other models show higher label sensitivity",
+                "evidence": f"label_sensitivity_rate={_safe_float(robust.get('label_sensitivity_rate')):.3f}",
+                "takeaway": "Use when robustness to source-label perturbations is a priority.",
+            }
+        )
+
+    fallback_summary = (
+        f"Snapshot covers {record_count} decisions across {model_count} models and {run_count} runs. "
+        f"Composite ranking currently selects {best_name} as the best overall trade-off."
+    )
+
+    return {
+        "best_name": best_name,
+        "best_rationale": f"Best by composite score ({best_score:.3f}) from snapshot metrics.",
+        "best_tradeoffs": "Use model comparison table below to decide latency vs reliability vs robustness trade-offs.",
+        "executive_summary": fallback_summary,
+        "metric_highlights": fallback_highlights,
+        "recommendations": fallback_recommendations,
+        "flaws_and_biases": fallback_risks,
+        "confidence_and_caveats": [
+            "Snapshot-derived fallback content is deterministic from run artifacts.",
+            "Narrative quality improves when LLM summary fields are present.",
+        ],
+        "per_model_insights": fallback_insights,
+        "model_comparisons": fallback_comparisons,
+    }
+
+
 def render_llm_summary_section(summary_path: str) -> None:
     st.subheader("✨ LLM Summary")
     payload = load_llm_summary_file(summary_path)
@@ -171,6 +290,7 @@ def render_llm_summary_section(summary_path: str) -> None:
     llm_summary = payload.get("llm_summary") if isinstance(payload.get("llm_summary"), dict) else {}
     snapshot = payload.get("snapshot") if isinstance(payload.get("snapshot"), dict) else {}
     generator = payload.get("generator") if isinstance(payload.get("generator"), dict) else {}
+    fallback = _build_snapshot_fallbacks(snapshot)
 
     header_cols = st.columns([2, 1, 1, 1])
     header_cols[0].markdown(f"**{str(llm_summary.get('headline') or 'Experiment Intelligence Snapshot')}**")
@@ -179,9 +299,9 @@ def render_llm_summary_section(summary_path: str) -> None:
     header_cols[3].metric("Runs", len(snapshot.get("runs", []) or []))
 
     best = llm_summary.get("best_model") if isinstance(llm_summary.get("best_model"), dict) else {}
-    best_name = str(best.get("name") or "N/A")
-    best_rationale = str(best.get("rationale") or "")
-    best_tradeoffs = str(best.get("tradeoffs") or "")
+    best_name = str(best.get("name") or fallback["best_name"])
+    best_rationale = str(best.get("rationale") or fallback["best_rationale"])
+    best_tradeoffs = str(best.get("tradeoffs") or fallback["best_tradeoffs"])
 
     with st.container(border=True):
         st.markdown("**Best Model (LLM Judgement)**")
@@ -191,23 +311,11 @@ def render_llm_summary_section(summary_path: str) -> None:
         if best_tradeoffs:
             st.caption(f"Trade-offs: {best_tradeoffs}")
 
-    summary_text = str(llm_summary.get("executive_summary") or "").strip()
-    stream_key = f"llm_summary_streamed::{summary_path}::{Path(summary_path).stat().st_mtime_ns}"
-    controls = st.columns([1, 5])
-    replay = controls[0].button("Replay", key="llm_summary_replay")
-    controls[1].caption("Simulated typing effect over precomputed offline summary")
+    summary_text = str(llm_summary.get("executive_summary") or fallback["executive_summary"]).strip()
 
     with st.container(border=True):
         st.markdown("**Executive Summary**")
-        if summary_text:
-            should_stream = replay or not st.session_state.get(stream_key, False)
-            if should_stream:
-                st.write_stream(_stream_chars(summary_text))
-                st.session_state[stream_key] = True
-            else:
-                st.markdown(summary_text)
-        else:
-            st.caption("No executive summary text found in the saved file.")
+        st.markdown(summary_text)
 
     top_tab, model_tab, recommendation_tab, risk_tab = st.tabs(
         ["Highlights", "Model Insights", "Recommendations", "Risks and Caveats"]
@@ -216,31 +324,34 @@ def render_llm_summary_section(summary_path: str) -> None:
     with top_tab:
         c1, c2 = st.columns(2)
         with c1:
-            _render_bullets("Metric Highlights", [str(x) for x in (llm_summary.get("metric_highlights") or [])])
+            highlights = llm_summary.get("metric_highlights") or fallback["metric_highlights"]
+            _render_bullets("Metric Highlights", [str(x) for x in highlights])
         with c2:
-            _render_comparison_table([x for x in (llm_summary.get("model_comparisons") or []) if isinstance(x, dict)])
+            comparisons = llm_summary.get("model_comparisons") or fallback["model_comparisons"]
+            _render_comparison_table([x for x in comparisons if isinstance(x, dict)])
 
     with model_tab:
-        insight_rows = [x for x in (llm_summary.get("per_model_insights") or []) if isinstance(x, dict)]
-        if insight_rows:
-            _render_insight_cards(insight_rows)
-        else:
-            st.info("No per-model insight objects found in this summary file. Regenerate with the latest prompt.")
+        insights_source = llm_summary.get("per_model_insights") or fallback["per_model_insights"]
+        insight_rows = [x for x in insights_source if isinstance(x, dict)]
+        _render_insight_cards(insight_rows)
 
     with recommendation_tab:
         with st.container(border=True):
-            _render_bullets("Actionable Recommendations", [str(x) for x in (llm_summary.get("recommendations") or [])])
+            recommendations = llm_summary.get("recommendations") or fallback["recommendations"]
+            _render_bullets("Actionable Recommendations", [str(x) for x in recommendations])
 
     with risk_tab:
         left, right = st.columns(2)
         with left:
             with st.container(border=True):
-                _render_bullets("Flaws and Biases", [str(x) for x in (llm_summary.get("flaws_and_biases") or [])])
+                flaws = llm_summary.get("flaws_and_biases") or fallback["flaws_and_biases"]
+                _render_bullets("Flaws and Biases", [str(x) for x in flaws])
         with right:
             with st.container(border=True):
+                caveats = llm_summary.get("confidence_and_caveats") or fallback["confidence_and_caveats"]
                 _render_bullets(
                     "Confidence and Caveats",
-                    [str(x) for x in (llm_summary.get("confidence_and_caveats") or [])],
+                    [str(x) for x in caveats],
                 )
 
     with st.expander("LLM Summary Metadata", expanded=False):

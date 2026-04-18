@@ -240,6 +240,10 @@ If you publish dashboard.py via Streamlit Community Cloud:
 - Point Streamlit Cloud to this repository.
 - Use requirements.txt for dependency installation.
 
+Live app:
+
+- [LLM News Bias Analysis Streamlit app](https://llm-news-bias-analysis.streamlit.app)
+
 ## 12) Public FastAPI Deployment
 
 The analytics API can be published separately so others can access your metrics endpoints.
@@ -248,14 +252,18 @@ The analytics API can be published separately so others can access your metrics 
 
 This repo includes render.yaml for one-click web service deployment.
 
+Live API base URL:
+
+- [Sourcerers Analytics API](https://sourcerers-analytics-api.onrender.com/)
+
 Steps:
 
 1. Connect this repository in Render.
 2. Select Blueprint deploy (it will read render.yaml).
 3. After deploy, use:
 
-- /docs for Swagger UI
-- /redoc for ReDoc
+- [Swagger UI](https://sourcerers-analytics-api.onrender.com/docs)
+- [ReDoc](https://sourcerers-analytics-api.onrender.com/redoc)
 
 1. Optional safety defaults already set in render.yaml:
 

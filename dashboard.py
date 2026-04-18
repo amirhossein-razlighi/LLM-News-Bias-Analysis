@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import json
 import os
 import re
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -82,6 +84,175 @@ def get_dashboard_snapshot(selected_run: str = "", record_limit: int = 50) -> di
         "run_summaries": _run_summaries(df),
         "records": _sample_records(filtered, limit=record_limit),
     }
+
+
+@st.cache_data(ttl=10)
+def load_llm_summary_file(summary_path: str) -> dict[str, Any] | None:
+    path = Path(summary_path)
+    if not path.exists() or not path.is_file():
+        return None
+    with path.open("r", encoding="utf-8") as f:
+        payload = json.load(f)
+    if not isinstance(payload, dict):
+        return None
+    return payload
+
+
+def _stream_chars(text: str, delay_seconds: float = 0.003) -> Any:
+    for ch in text:
+        yield ch
+        time.sleep(delay_seconds)
+
+
+def _render_bullets(title: str, items: list[str]) -> None:
+    if not items:
+        return
+    st.markdown(f"**{title}**")
+    for item in items:
+        st.markdown(f"- {str(item)}")
+
+
+def _render_insight_cards(items: list[dict[str, Any]]) -> None:
+    if not items:
+        return
+    st.markdown("**Per-Model Strengths and Weaknesses**")
+    columns = st.columns(2)
+    for idx, item in enumerate(items):
+        model = str(item.get("model") or "Unknown model")
+        strengths = [str(x) for x in (item.get("strengths") or [])]
+        weaknesses = [str(x) for x in (item.get("weaknesses") or [])]
+        deployment_fit = str(item.get("deployment_fit") or "")
+
+        with columns[idx % 2]:
+            with st.container(border=True):
+                st.markdown(f"**{model}**")
+                if strengths:
+                    st.caption("Strengths")
+                    for row in strengths:
+                        st.markdown(f"- {row}")
+                if weaknesses:
+                    st.caption("Weaknesses")
+                    for row in weaknesses:
+                        st.markdown(f"- {row}")
+                if deployment_fit:
+                    st.caption(f"Deployment fit: {deployment_fit}")
+
+
+def _render_comparison_table(items: list[dict[str, Any]]) -> None:
+    if not items:
+        return
+    rows: list[dict[str, str]] = []
+    for item in items:
+        rows.append(
+            {
+                "Comparison": str(item.get("title") or ""),
+                "Winner": str(item.get("winner") or ""),
+                "Trade-off": str(item.get("loser_or_tradeoff") or ""),
+                "Evidence": str(item.get("evidence") or ""),
+                "Takeaway": str(item.get("takeaway") or ""),
+            }
+        )
+    if rows:
+        st.markdown("**Model-vs-Model Comparisons**")
+        st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+
+
+def render_llm_summary_section(summary_path: str) -> None:
+    st.subheader("✨ LLM Summary")
+    payload = load_llm_summary_file(summary_path)
+    if payload is None:
+        st.info(
+            "No LLM summary file found yet. Generate one offline, then refresh. "
+            "Example: uv run python -m app.cli.generate_llm_dashboard_summary "
+            "--outputs-dir outputs --model gemma4:latest --summary-json outputs/llm_dashboard_summary.json"
+        )
+        return
+
+    llm_summary = payload.get("llm_summary") if isinstance(payload.get("llm_summary"), dict) else {}
+    snapshot = payload.get("snapshot") if isinstance(payload.get("snapshot"), dict) else {}
+    generator = payload.get("generator") if isinstance(payload.get("generator"), dict) else {}
+
+    header_cols = st.columns([2, 1, 1, 1])
+    header_cols[0].markdown(f"**{str(llm_summary.get('headline') or 'Experiment Intelligence Snapshot')}**")
+    header_cols[1].metric("Records", int(snapshot.get("record_count", 0) or 0))
+    header_cols[2].metric("Models", len(snapshot.get("models", []) or []))
+    header_cols[3].metric("Runs", len(snapshot.get("runs", []) or []))
+
+    best = llm_summary.get("best_model") if isinstance(llm_summary.get("best_model"), dict) else {}
+    best_name = str(best.get("name") or "N/A")
+    best_rationale = str(best.get("rationale") or "")
+    best_tradeoffs = str(best.get("tradeoffs") or "")
+
+    with st.container(border=True):
+        st.markdown("**Best Model (LLM Judgement)**")
+        st.markdown(f"**{best_name}**")
+        if best_rationale:
+            st.caption(best_rationale)
+        if best_tradeoffs:
+            st.caption(f"Trade-offs: {best_tradeoffs}")
+
+    summary_text = str(llm_summary.get("executive_summary") or "").strip()
+    stream_key = f"llm_summary_streamed::{summary_path}::{Path(summary_path).stat().st_mtime_ns}"
+    controls = st.columns([1, 5])
+    replay = controls[0].button("Replay", key="llm_summary_replay")
+    controls[1].caption("Simulated typing effect over precomputed offline summary")
+
+    with st.container(border=True):
+        st.markdown("**Executive Summary**")
+        if summary_text:
+            should_stream = replay or not st.session_state.get(stream_key, False)
+            if should_stream:
+                st.write_stream(_stream_chars(summary_text))
+                st.session_state[stream_key] = True
+            else:
+                st.markdown(summary_text)
+        else:
+            st.caption("No executive summary text found in the saved file.")
+
+    top_tab, model_tab, recommendation_tab, risk_tab = st.tabs(
+        ["Highlights", "Model Insights", "Recommendations", "Risks and Caveats"]
+    )
+
+    with top_tab:
+        c1, c2 = st.columns(2)
+        with c1:
+            _render_bullets("Metric Highlights", [str(x) for x in (llm_summary.get("metric_highlights") or [])])
+        with c2:
+            _render_comparison_table([x for x in (llm_summary.get("model_comparisons") or []) if isinstance(x, dict)])
+
+    with model_tab:
+        insight_rows = [x for x in (llm_summary.get("per_model_insights") or []) if isinstance(x, dict)]
+        if insight_rows:
+            _render_insight_cards(insight_rows)
+        else:
+            st.info("No per-model insight objects found in this summary file. Regenerate with the latest prompt.")
+
+    with recommendation_tab:
+        with st.container(border=True):
+            _render_bullets("Actionable Recommendations", [str(x) for x in (llm_summary.get("recommendations") or [])])
+
+    with risk_tab:
+        left, right = st.columns(2)
+        with left:
+            with st.container(border=True):
+                _render_bullets("Flaws and Biases", [str(x) for x in (llm_summary.get("flaws_and_biases") or [])])
+        with right:
+            with st.container(border=True):
+                _render_bullets(
+                    "Confidence and Caveats",
+                    [str(x) for x in (llm_summary.get("confidence_and_caveats") or [])],
+                )
+
+    with st.expander("LLM Summary Metadata", expanded=False):
+        st.json(
+            {
+                "generated_at_utc": payload.get("generated_at_utc"),
+                "generator_model": generator.get("model"),
+                "source_file": summary_path,
+                "latency_ms": payload.get("latency_ms"),
+                "best_model_by_composite": snapshot.get("best_model_by_composite"),
+            }
+        )
 
 
 def load_manifest(path: str) -> ModelManifest:
@@ -951,6 +1122,7 @@ with st.sidebar:
     ollama_base = st.text_input("Ollama Base URL", value=DEFAULT_OLLAMA_BASE).rstrip("/")
     selected_run = st.text_input("Run filter (optional)", value="")
     st.caption("Analytics mode: embedded in Streamlit using the same backend logic as the FastAPI app.")
+    llm_summary_path = st.text_input("LLM summary file", value="outputs/llm_dashboard_summary.json")
 
     st.divider()
     st.subheader("Bulk Ingest")
@@ -998,6 +1170,8 @@ with st.sidebar:
     st.subheader("API Surface")
     st.code("uv run uvicorn app.api.engine_analytics:app --host 0.0.0.0 --port 8000", language="bash")
     st.caption("The FastAPI app stays in the repo for local demos, client integrations, and presentation samples.")
+
+render_llm_summary_section(llm_summary_path)
 
 analytics_tab, runner_tab, explainer_tab = st.tabs(["Analytics", "Run Models", "Metrics explanations"])
 

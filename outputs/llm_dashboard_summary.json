@@ -1,0 +1,160 @@
+{
+  "generated_at_utc": "2026-04-18T10:38:05.910035+00:00",
+  "generator": {
+    "model": "gemma4:latest",
+    "base_url": "http://localhost:11434",
+    "timeout_seconds": 180,
+    "max_tokens": 1800,
+    "max_tokens_used": 1800,
+    "retry_used": false,
+    "max_runs": 12
+  },
+  "snapshot": {
+    "record_count": 9216,
+    "models": [
+      "gemma3:4b",
+      "gemma4:latest",
+      "llama3.2:3b",
+      "mistral:latest",
+      "phi4-mini:3.8b",
+      "qwen2.5:7b",
+      "qwen3:8b"
+    ],
+    "runs": [
+      "run_20260413_132111",
+      "run_20260416_171758",
+      "run_20260417_151119",
+      "run_20260417_163830",
+      "run_20260418_091127"
+    ],
+    "per_model": [
+      {
+        "model": "gemma4:latest",
+        "records": 1248,
+        "parse_success_rate": 0.999199,
+        "parse_failure_rate": 0.000801,
+        "avg_latency_ms": 2470.877404,
+        "p95_latency_ms": 2837.3,
+        "left_rate": 0.433039,
+        "center_rate": 0.412991,
+        "right_rate": 0.15397,
+        "partisan_skew_score": 0.27907,
+        "label_sensitivity_rate": 0.421222,
+        "latency_speed_score": 0.788226,
+        "robustness_score": 0.578778,
+        "composite_score": 0.830802
+      },
+      {
+        "model": "phi4-mini:3.8b",
+        "records": 1344,
+        "parse_success_rate": 0.965774,
+        "parse_failure_rate": 0.010417,
+        "avg_latency_ms": 2189.069196,
+        "p95_latency_ms": 2717.4,
+        "left_rate": 0.418045,
+        "center_rate": 0.37218,
+        "right_rate": 0.209774,
+        "partisan_skew_score": 0.208271,
+        "label_sensitivity_rate": 0.415152,
+        "latency_speed_score": 0.812379,
+        "robustness_score": 0.584848,
+        "composite_score": 0.824524
+      },
+      {
+        "model": "llama3.2:3b",
+        "records": 1344,
+        "parse_success_rate": 0.929315,
+        "parse_failure_rate": 0.070685,
+        "avg_latency_ms": 1571.654762,
+        "p95_latency_ms": 1992.85,
+        "left_rate": 0.277822,
+        "center_rate": 0.411529,
+        "right_rate": 0.310649,
+        "partisan_skew_score": -0.032826,
+        "label_sensitivity_rate": 0.526846,
+        "latency_speed_score": 0.865296,
+        "robustness_score": 0.473154,
+        "composite_score": 0.796069
+      },
+      {
+        "model": "mistral:latest",
+        "records": 1248,
+        "parse_success_rate": 0.995994,
+        "parse_failure_rate": 0.004006,
+        "avg_latency_ms": 3036.5,
+        "p95_latency_ms": 3575.95,
+        "left_rate": 0.338697,
+        "center_rate": 0.493162,
+        "right_rate": 0.168142,
+        "partisan_skew_score": 0.170555,
+        "label_sensitivity_rate": 0.525806,
+        "latency_speed_score": 0.739747,
+        "robustness_score": 0.474194,
+        "composite_score": 0.78867
+      },
+      {
+        "model": "gemma3:4b",
+        "records": 1344,
+        "parse_success_rate": 0.993304,
+        "parse_failure_rate": 0.006696,
+        "avg_latency_ms": 5964.408482,
+        "p95_latency_ms": 6830.95,
+        "left_rate": 0.344569,
+        "center_rate": 0.409738,
+        "right_rate": 0.245693,
+        "partisan_skew_score": 0.098876,
+        "label_sensitivity_rate": 0.503012,
+        "latency_speed_score": 0.488802,
+        "robustness_score": 0.496988,
+        "composite_score": 0.717874
+      },
+      {
+        "model": "qwen3:8b",
+        "records": 1344,
+        "parse_success_rate": 0.999256,
+        "parse_failure_rate": 0.000744,
+        "avg_latency_ms": 9494.087798,
+        "p95_latency_ms": 11138.7,
+        "left_rate": 0.512286,
+        "center_rate": 0.306776,
+        "right_rate": 0.180938,
+        "partisan_skew_score": 0.331348,
+        "label_sensitivity_rate": 0.404762,
+        "latency_speed_score": 0.18628,
+        "robustness_score": 0.595238,
+        "composite_score": 0.654359
+      },
+      {
+        "model": "qwen2.5:7b",
+        "records": 1344,
+        "parse_success_rate": 0.999256,
+        "parse_failure_rate": 0.000744,
+        "avg_latency_ms": 11667.508563,
+        "p95_latency_ms": 14991.9,
+        "left_rate": 0.389427,
+        "center_rate": 0.38347,
+        "right_rate": 0.227103,
+        "partisan_skew_score": 0.162323,
+        "label_sensitivity_rate": 0.495522,
+        "latency_speed_score": 0.0,
+        "robustness_score": 0.504478,
+        "composite_score": 0.575785
+      }
+    ],
+    "best_model_by_composite": {
+      "model": "gemma4:latest",
+      "composite_score": 0.8308016939607091,
+      "why": "Best weighted balance of reliability, speed, and robustness using composite = 0.45*parse_success + 0.30*speed + 0.25*robustness"
+    },
+    "notes": [
+      "Composite ranking favors parse reliability first, then speed, then robustness.",
+      "Label sensitivity is measured from bucket changes between headlines_with_sources and headlines_with_manipulated_sources."
+    ]
+  },
+  "llm_summary": {
+    "name": "gemma4:latest",
+    "rationale": "It achieved the highest composite score (0.831), demonstrating the best weighted combination of high parse success (0.999), acceptable speed (Avg Latency: 2471ms), and solid robustness (0.579).",
+    "tradeoffs": "The primary trade-off is accepting a higher average latency (2471ms) compared to Llama3.2:3b (1572ms) in exchange for significantly better overall reliability and composite performance."
+  },
+  "latency_ms": 59318
+}

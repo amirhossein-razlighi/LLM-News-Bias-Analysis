@@ -52,6 +52,7 @@ These files are enough to fully reproduce downstream analytics and plots.
 - app/cli/prepare_real_incidents.py: Converts raw article JSON data into experiment-ready incidents.
 - app/cli/run_experiments.py: Runs condition/model combinations and writes run artifacts.
 - app/cli/generate_report_assets.py: Builds report plots and summary tables from outputs.
+- app/cli/generate_llm_dashboard_summary.py: Generates a saved LLM executive summary JSON for the dashboard (offline, via Ollama).
 - app/api/engine_analytics.py: Ingestion + metrics engine used by API and dashboard.
 - configs/models.example.yaml: Manifest of Ollama models and decoding params.
 - docs/figures/: Generated report assets (plots and summary metrics).
@@ -128,6 +129,17 @@ uv run python -m app.cli.generate_report_assets \
   --outputs-dir outputs \
   --assets-dir docs/figures
 ```
+
+### D. Generate offline LLM executive summary for dashboard
+
+```bash
+uv run python -m app.cli.generate_llm_dashboard_summary \
+  --outputs-dir outputs \
+  --model gemma4:latest \
+  --summary-json outputs/llm_dashboard_summary.json
+```
+
+This writes a reusable summary file that the dashboard shows in the top "✨ LLM Summary" section.
 
 ## 6) Evaluation Protocol
 

@@ -7,9 +7,21 @@ from typing import List, Optional
 import numpy as np
 import pandas as pd
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 app = FastAPI(title="Sourcerers Analytics Engine")
+
+raw_origins = os.getenv("API_ALLOW_ORIGINS", "")
+allow_origins = [origin.strip() for origin in raw_origins.split(",") if origin.strip()]
+if allow_origins:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=allow_origins,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
 # --- DATABASE LAYER ---
 BASE_DIR = Path(__file__).resolve().parents[2]

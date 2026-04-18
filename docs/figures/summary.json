@@ -1,0 +1,22 @@
+{
+  "total_decisions": 9312,
+  "run_count": 6,
+  "model_count": 7,
+  "condition_count": 4,
+  "parse_success_rate": 0.8491194158075601,
+  "parse_success_ci95_low": 0.8417069372852234,
+  "parse_success_ci95_high": 0.8568540592783505,
+  "parse_failure_rate": 0.14744415807560138,
+  "baseline_center_rate": 0.33333333333333326,
+  "center_selection_rate": 0.3960196498299534,
+  "center_selection_ci95_low": 0.3859396649452072,
+  "center_selection_ci95_high": 0.40635155561153796,
+  "bootstrap_samples": 1000,
+  "bootstrap_seed": 42,
+  "frozen_seed": 42,
+  "frozen_manifest": "configs/models.final.yaml",
+  "frozen_manifest_sha256": "c3b07097d2ac732c28b67730a642c10b9572677e7cfde67ce35b80a95a99cfba",
+  "error_sample_size": 10,
+  "qualitative_error_count": 10,
+  "assets_dir": "docs/figures"
+}

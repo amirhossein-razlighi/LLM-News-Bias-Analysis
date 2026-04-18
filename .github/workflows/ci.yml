@@ -1,0 +1,99 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  test-and-validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Install dependencies
+        run: uv sync
+
+      - name: Run unit tests
+        run: uv run pytest -q
+
+      - name: Generate analytics report assets
+        run: uv run python -m app.cli.generate_report_assets --outputs-dir outputs --assets-dir docs/figures
+
+      - name: Validate summary metrics schema
+        run: |
+          uv run python - <<'PY'
+          import json
+          from pathlib import Path
+
+          summary_path = Path("docs/figures/summary.json")
+          if not summary_path.exists():
+              raise SystemExit("summary.json was not generated")
+
+          payload = json.loads(summary_path.read_text(encoding="utf-8"))
+          required = {
+              "total_decisions",
+              "run_count",
+              "model_count",
+              "condition_count",
+              "parse_success_rate",
+              "parse_success_ci95_low",
+              "parse_success_ci95_high",
+              "parse_failure_rate",
+              "baseline_center_rate",
+              "center_selection_rate",
+              "center_selection_ci95_low",
+              "center_selection_ci95_high",
+              "bootstrap_samples",
+              "bootstrap_seed",
+              "frozen_seed",
+              "frozen_manifest",
+              "error_sample_size",
+              "qualitative_error_count",
+              "assets_dir",
+          }
+          missing = sorted(required.difference(payload))
+          if missing:
+              raise SystemExit(f"summary.json is missing keys: {missing}")
+
+          for key in ["parse_success_rate", "parse_failure_rate", "baseline_center_rate"]:
+              value = float(payload[key])
+              if value < 0.0 or value > 1.0:
+                  raise SystemExit(f"{key} must be in [0, 1], got {value}")
+
+          if int(payload["total_decisions"]) <= 0:
+              raise SystemExit("total_decisions must be > 0")
+          if int(payload["model_count"]) <= 0:
+              raise SystemExit("model_count must be > 0")
+          if int(payload["condition_count"]) <= 0:
+              raise SystemExit("condition_count must be > 0")
+
+            required_files = [
+              Path("docs/figures/model_summary.md"),
+              Path("docs/figures/qualitative_errors.md"),
+              Path("docs/figures/qualitative_errors.json"),
+              Path("docs/figures/limitations.md"),
+            ]
+            missing_files = [str(path) for path in required_files if not path.exists()]
+            if missing_files:
+              raise SystemExit(f"Missing required report assets: {missing_files}")
+          PY
+
+      - name: Upload report assets artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: report-assets
+          path: docs/figures
+          retention-days: 14

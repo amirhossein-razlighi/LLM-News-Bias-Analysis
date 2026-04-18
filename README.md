@@ -141,6 +141,22 @@ uv run python -m app.cli.generate_llm_dashboard_summary \
 
 This writes a reusable summary file that the dashboard shows in the top "✨ LLM Summary" section.
 
+### E. Build technical documentation site
+
+```bash
+uv sync --group docs
+uv run mkdocs serve
+```
+
+Static build check:
+
+```bash
+uv run mkdocs build --strict
+```
+
+The documentation site includes architecture, usage guides, and auto-generated API reference from source modules via mkdocstrings.
+GitHub Pages publishing is automated by `.github/workflows/docs.yml`.
+
 ## 6) Evaluation Protocol
 
 ### Main Evaluation Signals
@@ -234,6 +250,7 @@ Sankey flow snapshot (counts extracted from the generated interactive figure):
 | sources_only | 648 | 1471 | 171 | 2290 |
 
 ![Condition to bucket Sankey snapshot](docs/figures/sankey_plot.png)
+
 ### Additional generated analysis assets
 
 - [Counterfactual effects table](docs/figures/counterfactual_effects.md)

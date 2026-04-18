@@ -1,3 +1,5 @@
+"""Robust parsing utilities for model JSON outputs with fallback extraction paths."""
+
 from __future__ import annotations
 
 import json

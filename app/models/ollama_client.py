@@ -1,3 +1,5 @@
+"""HTTP client wrapper for local Ollama generation endpoints with endpoint fallbacks."""
+
 from __future__ import annotations
 
 import time

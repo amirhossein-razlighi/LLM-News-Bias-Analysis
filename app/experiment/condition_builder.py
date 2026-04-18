@@ -1,3 +1,5 @@
+"""Builds condition-aware candidate bundles for each prepared incident."""
+
 from __future__ import annotations
 
 import itertools

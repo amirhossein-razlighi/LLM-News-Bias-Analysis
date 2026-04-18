@@ -1,0 +1,65 @@
+site_name: Sourcerers Technical Documentation
+site_description: Technical documentation for the Sourcerers LLM source-selection experimentation platform.
+site_url: ""
+repo_name: Sourcerers
+
+theme:
+  name: material
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.instant
+    - content.code.copy
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          paths:
+            - .
+          options:
+            show_source: true
+            show_root_heading: true
+            show_root_full_path: false
+            show_signature_annotations: true
+            separate_signature: true
+            members_order: source
+
+markdown_extensions:
+  - admonition
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.details
+  - pymdownx.superfences
+
+nav:
+  - Home: index.md
+  - System Overview:
+      - Architecture: architecture.md
+      - Data Model: data-model.md
+      - Experiment Flow: experiment-flow.md
+  - Usage Guides:
+      - Quickstart: guides/quickstart.md
+      - Examples: guides/examples.md
+      - CLI Guide: guides/cli.md
+      - Dashboard Guide: guides/dashboard.md
+      - API Guide: guides/api.md
+      - Deployment: guides/deployment.md
+  - API Reference:
+      - Overview: api/index.md
+      - Analytics API Module: api/engine_analytics.md
+      - Schemas: api/schemas_models.md
+      - Experiment Builder: api/experiment.md
+      - Parsing: api/parsing.md
+      - Ollama Client: api/ollama_client.md
+      - CLI Modules: api/cli_modules.md
+  - Generated Assets:
+      - Model Summary: figures/model_summary.md
+      - Counterfactual Effects: figures/counterfactual_effects.md
+      - Cross-Model Agreement: figures/cross_model_agreement.md
+      - Failure Taxonomy: figures/failure_taxonomy.md
+      - Model Instability: figures/model_instability.md
+      - Qualitative Errors: figures/qualitative_errors.md
+      - Limitations: figures/limitations.md

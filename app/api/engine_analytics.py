@@ -1,3 +1,10 @@
+"""FastAPI analytics engine for ingestion, metric computation, and experiment reporting.
+
+This module is the shared backend used by both the HTTP API surface and the
+Streamlit dashboard, including run ingestion, normalization, and aggregated
+comparison metrics.
+"""
+
 import json
 import os
 import re

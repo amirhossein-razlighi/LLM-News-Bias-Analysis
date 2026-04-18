@@ -22,6 +22,12 @@ dependencies = [
 dev = [
   "pytest>=8.3.2"
 ]
+docs = [
+  "mkdocs>=1.6.1",
+  "mkdocs-material>=9.6.17",
+  "mkdocstrings[python]>=0.30.0",
+  "pymdown-extensions>=10.14.3",
+]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]

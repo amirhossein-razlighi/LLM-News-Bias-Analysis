@@ -26,6 +26,12 @@ jobs:
       - name: Install dependencies
         run: uv sync
 
+      - name: Build distribution package
+        run: uv run python -m build
+
+      - name: Validate package metadata
+        run: uv run twine check dist/*
+
       - name: Run unit tests
         run: uv run pytest -q
 

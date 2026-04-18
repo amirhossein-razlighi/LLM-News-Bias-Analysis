@@ -47,6 +47,7 @@ nav:
       - Dashboard Guide: guides/dashboard.md
       - API Guide: guides/api.md
       - Deployment: guides/deployment.md
+      - Package Publishing: guides/package-publishing.md
   - API Reference:
       - Overview: api/index.md
       - Analytics API Module: api/engine_analytics.md

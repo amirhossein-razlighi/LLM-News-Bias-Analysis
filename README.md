@@ -128,6 +128,23 @@ uv run python -m app.cli.run_experiments \
   --seed 42
 ```
 
+Optional runtime optimization flags (disabled by default for reproducibility with existing outputs):
+
+```bash
+uv run python -m app.cli.run_experiments \
+  --input data/real_incidents_all.jsonl \
+  --models-manifest configs/models.example.yaml \
+  --output-dir outputs \
+  --enable-flash-attention \
+  --enable-kv-cache \
+  --kv-cache-type q8_0
+```
+
+Notes:
+
+- Default behavior is unchanged unless these flags are explicitly provided.
+- Runtime options are recorded in each request row under `runtime_options` for traceability.
+
 ### C. Generate report assets from saved outputs
 
 ```bash
@@ -162,6 +179,49 @@ uv run mkdocs build --strict
 
 The documentation site includes architecture, usage guides, and auto-generated API reference from source modules via mkdocstrings.
 GitHub Pages publishing is automated by `.github/workflows/docs.yml`.
+
+### F. Build and publish as a pip package
+
+Distribution name:
+
+- `sourcerers`
+
+Local package build + validation:
+
+```bash
+uv sync
+uv run python -m build
+uv run twine check dist/*
+```
+
+Install locally from built artifacts:
+
+```bash
+pip install dist/*.whl
+```
+
+Import examples:
+
+```python
+from app import (
+  OllamaClient,
+  parse_model_response,
+  build_condition_bundles,
+  build_selection_prompt,
+)
+```
+
+Automated PyPI publishing workflow:
+
+- `.github/workflows/publish-pypi.yml`
+
+To enable publishing in your repo:
+
+1. Create GitHub environment `pypi`.
+2. In PyPI project settings, configure Trusted Publisher for this repository/workflow.
+3. Publish a GitHub Release (or run the workflow manually).
+
+CI now validates package build health on every push/PR via `.github/workflows/ci.yml`.
 
 ## 6) Evaluation Protocol
 

@@ -91,3 +91,26 @@ def test_generate_falls_back_to_api_chat(monkeypatch):
     assert generation.text == "hello from chat"
     assert any(c.endswith("/api/generate") for c in calls)
     assert any(c.endswith("/api/chat") for c in calls)
+
+
+def test_generate_runtime_options_are_forwarded(monkeypatch):
+    captured = {}
+
+    def fake_post(url, json, timeout):
+        captured[url] = json
+        return _Response({"response": '{"selected_article_id":"a1","reason":"ok"}'})
+
+    monkeypatch.setattr(requests, "post", fake_post)
+
+    client = OllamaClient()
+    client.generate(
+        model="llama3",
+        prompt="hello",
+        retries=0,
+        runtime_options={"flash_attn": True, "use_cache": True, "kv_cache_type": "q8_0"},
+    )
+
+    payload = next(iter(captured.values()))
+    assert payload["options"]["flash_attn"] is True
+    assert payload["options"]["use_cache"] is True
+    assert payload["options"]["kv_cache_type"] == "q8_0"

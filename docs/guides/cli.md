@@ -16,3 +16,25 @@
 - Use deterministic seeds for comparable experiment slices.
 - Regenerate report assets and LLM summary after adding new runs.
 - Treat parse_failure and fallback records as first-class diagnostics.
+
+## Runtime Optimization Flags (run_experiments)
+
+The experiment runner supports optional low-level runtime options for Ollama:
+
+- `--enable-flash-attention`
+- `--enable-kv-cache`
+- `--kv-cache-type <value>`
+
+Example:
+
+```bash
+uv run python -m app.cli.run_experiments \
+	--input data/real_incidents_all.jsonl \
+	--models-manifest configs/models.example.yaml \
+	--output-dir outputs \
+	--enable-flash-attention \
+	--enable-kv-cache \
+	--kv-cache-type q8_0
+```
+
+Defaults intentionally keep these unset so existing workflows and historical output reproducibility stay unchanged.

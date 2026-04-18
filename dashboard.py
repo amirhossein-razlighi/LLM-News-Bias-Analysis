@@ -416,6 +416,28 @@ def run_batch_experiment(
         row) for row in read_jsonl(input_path)]
     conditions = [ConditionName(c) for c in condition_values]
     manifest = load_manifest(models_manifest_path)
+
+    # When a commercial provider is selected, only run models whose name begins
+    # with the expected LiteLLM provider prefix so that selecting "google" does
+    # not accidentally call OpenAI or Anthropic models that may also be present
+    # in the same manifest file.
+    _PROVIDER_PREFIXES: dict[str, tuple[str, ...]] = {
+        "openai": ("openai/",),
+        "anthropic": ("anthropic/",),
+        "google": ("gemini/", "google/"),
+    }
+    if provider != "ollama":
+        prefixes = _PROVIDER_PREFIXES.get(provider, ())
+        if prefixes:
+            filtered_models = [m for m in manifest.models if any(
+                m.name.startswith(p) for p in prefixes)]
+            if not filtered_models:
+                raise ValueError(
+                    f"No models in the manifest match provider '{provider}'. "
+                    f"Expected names starting with: {', '.join(prefixes)}"
+                )
+            manifest = manifest.model_copy(update={"models": filtered_models})
+
     if provider == "ollama":
         client = OllamaClient(base_url=ollama_base_url)
     else:
@@ -1554,8 +1576,9 @@ with runner_tab:
                     f"No API key configured for **{batch_provider}**. Add one in the sidebar under *Commercial Model API Keys*.")
             _example_models = PROVIDER_MODELS.get(batch_provider, [""])
             st.info(
-                f"Commercial provider selected. Each `name:` entry in your manifest YAML must be "
-                f"a model identifier that LiteLLM recognises for **{batch_provider}**.\n\n"
+                f"Provider **{batch_provider}** selected. Only models in the manifest whose "
+                f"`name:` starts with the matching prefix will be run — other providers in the "
+                f"same YAML are automatically skipped.\n\n"
                 f"Supported examples for {batch_provider}: "
                 + ", ".join(f"`{m}`" for m in _example_models)
             )

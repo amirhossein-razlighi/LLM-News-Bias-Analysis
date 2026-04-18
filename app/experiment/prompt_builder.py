@@ -1,3 +1,5 @@
+"""Prompt construction utilities for controlled source-selection experiments."""
+
 from __future__ import annotations
 
 import json

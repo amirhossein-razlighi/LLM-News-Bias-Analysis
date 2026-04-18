@@ -1,3 +1,5 @@
+"""Pydantic schemas and enums for experiment requests, decisions, and model manifests."""
+
 from __future__ import annotations
 
 from datetime import datetime, timezone

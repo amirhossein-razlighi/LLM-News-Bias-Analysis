@@ -1,8 +1,24 @@
 [project]
-name = "sourcerers-member1-pipeline"
+name = "sourcerers"
 version = "0.1.0"
 description = "Local Ollama experiment pipeline for source-selection behavior analysis"
+readme = "README.md"
+license = "MIT"
 requires-python = ">=3.10,<3.11"
+keywords = ["llm", "nlp", "bias", "ollama", "fastapi", "streamlit"]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Developers",
+  "Intended Audience :: Science/Research",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Framework :: FastAPI",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+authors = [
+  { name = "Sourcerers Team" }
+]
 dependencies = [
   "fastapi>=0.135.2",
   "litellm>=1.83.9",
@@ -19,9 +35,32 @@ dependencies = [
   "watchdog>=6.0.0",
 ]
 
+[project.urls]
+Homepage = "https://github.com/amirhossein-razlighi/LLM-News-Bias-Analysis"
+Documentation = "https://amirhossein-razlighi.github.io/LLM-News-Bias-Analysis/"
+Repository = "https://github.com/amirhossein-razlighi/LLM-News-Bias-Analysis"
+Issues = "https://github.com/amirhossein-razlighi/LLM-News-Bias-Analysis/issues"
+
+[project.scripts]
+sourcerers-list-models = "app.cli.list_models:main"
+sourcerers-probe-model = "app.cli.probe_model:main"
+sourcerers-benchmark-models = "app.cli.benchmark_models:main"
+sourcerers-prepare-incidents = "app.cli.prepare_real_incidents:main"
+sourcerers-run-experiments = "app.cli.run_experiments:main"
+sourcerers-generate-assets = "app.cli.generate_report_assets:main"
+sourcerers-generate-llm-summary = "app.cli.generate_llm_dashboard_summary:main"
+
 [dependency-groups]
 dev = [
-  "pytest>=8.3.2"
+  "pytest>=8.3.2",
+  "build>=1.2.2.post1",
+  "twine>=6.1.0",
+]
+docs = [
+  "mkdocs>=1.6.1",
+  "mkdocs-material>=9.6.17",
+  "mkdocstrings[python]>=0.30.0",
+  "pymdown-extensions>=10.14.3",
 ]
 
 [tool.pytest.ini_options]
@@ -32,7 +71,7 @@ testpaths = ["tests"]
 packages = ["app"]
 
 [tool.hatch.build.targets.sdist]
-include = ["app", "config", "data", "tests", "README.md"]
+include = ["app", "config", "README.md", "LICENSE"]
 
 [build-system]
 requires = ["hatchling>=1.25.0"]

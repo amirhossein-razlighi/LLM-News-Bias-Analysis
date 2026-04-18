@@ -59,6 +59,21 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--retries", type=int, default=2)
     parser.add_argument("--base-url", default="http://localhost:11434")
     parser.add_argument(
+        "--enable-flash-attention",
+        action="store_true",
+        help="Enable flash attention via Ollama runtime options (opt-in).",
+    )
+    parser.add_argument(
+        "--enable-kv-cache",
+        action="store_true",
+        help="Enable KV cache via Ollama runtime options (opt-in).",
+    )
+    parser.add_argument(
+        "--kv-cache-type",
+        default=None,
+        help="Optional KV cache type passed to Ollama (for example: f16, q8_0).",
+    )
+    parser.add_argument(
         "--shuffle-candidates",
         action=argparse.BooleanOptionalAction,
         default=True,
@@ -97,6 +112,17 @@ def _prepare_bundles(
     return prepared
 
 
+def _build_runtime_options(args: argparse.Namespace) -> dict[str, object]:
+    options: dict[str, object] = {}
+    if args.enable_flash_attention:
+        options["flash_attn"] = True
+    if args.enable_kv_cache:
+        options["use_cache"] = True
+    if args.kv_cache_type:
+        options["kv_cache_type"] = str(args.kv_cache_type).strip()
+    return options
+
+
 def main() -> None:
     args = parse_args()
     run_id = datetime.now(timezone.utc).strftime("run_%Y%m%d_%H%M%S")
@@ -114,6 +140,16 @@ def main() -> None:
 
     client = OllamaClient(base_url=args.base_url)
     response_schema = selection_response_json_schema()
+    runtime_options = _build_runtime_options(args)
+    if runtime_options:
+        print(
+            json.dumps(
+                {
+                    "run_runtime_options": runtime_options,
+                    "note": "Defaults are unchanged unless these flags are explicitly set.",
+                }
+            )
+        )
 
     prepared_runs = _prepare_bundles(
         incidents,
@@ -162,6 +198,8 @@ def main() -> None:
                     )
                     request_record = request.model_dump(mode="json")
                     request_record["candidate_order"] = [c.article_id for c in candidates]
+                    if runtime_options:
+                        request_record["runtime_options"] = runtime_options
                     append_jsonl(requests_path, request_record)
                     request_count += 1
 
@@ -175,6 +213,7 @@ def main() -> None:
                             retries=args.retries,
                             think=model.think,
                             response_schema=response_schema,
+                            runtime_options=runtime_options or None,
                         )
                         parsed = parse_model_response(
                             text=generation.text,

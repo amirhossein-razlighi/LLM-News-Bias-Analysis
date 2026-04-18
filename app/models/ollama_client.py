@@ -1,3 +1,5 @@
+"""HTTP client wrapper for local Ollama generation endpoints with endpoint fallbacks."""
+
 from __future__ import annotations
 
 import time
@@ -34,25 +36,29 @@ class OllamaClient:
         retries: int = 2,
         think: bool | None = None,
         response_schema: dict[str, Any] | None = None,
+        runtime_options: dict[str, Any] | None = None,
     ) -> OllamaGeneration:
         total_predict = max_tokens * 4 if think else max_tokens
+        base_options: dict[str, Any] = {
+            "temperature": temperature,
+            "num_predict": total_predict,
+        }
+        if runtime_options:
+            # Caller-controlled low-level options (for example: flash_attn, use_cache,
+            # kv_cache_type) are merged explicitly to keep defaults unchanged.
+            base_options.update(runtime_options)
+
         generate_payload = {
             "model": model,
             "prompt": prompt,
             "stream": False,
-            "options": {
-                "temperature": temperature,
-                "num_predict": total_predict,
-            },
+            "options": dict(base_options),
         }
         chat_payload = {
             "model": model,
             "messages": [{"role": "user", "content": prompt}],
             "stream": False,
-            "options": {
-                "temperature": temperature,
-                "num_predict": total_predict,
-            },
+            "options": dict(base_options),
         }
         compat_payload = {
             "model": model,

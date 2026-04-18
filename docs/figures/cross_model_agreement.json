@@ -1,30 +1,30 @@
 [
   {
     "condition": "headlines_only",
-    "n_groups": 432,
-    "mean_agreement_rate": 0.6414700911228688,
-    "mean_normalized_entropy": 0.631498570095863,
-    "instability_score": 0.631498570095863
+    "n_groups": 424,
+    "mean_agreement_rate": 0.6409946840371369,
+    "mean_normalized_entropy": 0.6328563709804557,
+    "instability_score": 0.6328563709804557
   },
   {
     "condition": "headlines_with_manipulated_sources",
-    "n_groups": 432,
-    "mean_agreement_rate": 0.626318158436214,
-    "mean_normalized_entropy": 0.6497662924744237,
-    "instability_score": 0.6497662924744237
+    "n_groups": 424,
+    "mean_agreement_rate": 0.6239845387840671,
+    "mean_normalized_entropy": 0.6542016926693891,
+    "instability_score": 0.6542016926693891
   },
   {
     "condition": "headlines_with_sources",
-    "n_groups": 432,
-    "mean_agreement_rate": 0.6573596413874192,
-    "mean_normalized_entropy": 0.610695777384239,
-    "instability_score": 0.610695777384239
+    "n_groups": 424,
+    "mean_agreement_rate": 0.654039383048817,
+    "mean_normalized_entropy": 0.6167524886152344,
+    "instability_score": 0.6167524886152344
   },
   {
     "condition": "sources_only",
-    "n_groups": 432,
-    "mean_agreement_rate": 0.7486405055849501,
-    "mean_normalized_entropy": 0.45685136823654704,
-    "instability_score": 0.45685136823654704
+    "n_groups": 424,
+    "mean_agreement_rate": 0.7438978736148548,
+    "mean_normalized_entropy": 0.4654712053731028,
+    "instability_score": 0.4654712053731028
   }
 ]

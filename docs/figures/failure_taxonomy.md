@@ -2,9 +2,8 @@
 | --- | --- | --- | --- | --- |
 | gemma3:4b | success | other | 1335 | 0.9933035714285714 |
 | gemma3:4b | failed | invalid_or_missing_selected_article_id | 9 | 0.006696428571428571 |
-| gemma4:latest | success | other | 1343 | 0.5181327160493827 |
-| gemma4:latest | failed | other | 1248 | 0.48148148148148145 |
-| gemma4:latest | failed | invalid_or_missing_selected_article_id | 1 | 0.00038580246913580245 |
+| gemma4:latest | success | other | 1247 | 0.999198717948718 |
+| gemma4:latest | failed | invalid_or_missing_selected_article_id | 1 | 0.0008012820512820513 |
 | llama3.2:3b | success | other | 1249 | 0.9293154761904762 |
 | llama3.2:3b | failed | invalid_or_missing_selected_article_id | 95 | 0.07068452380952381 |
 | mistral:latest | success | other | 1243 | 0.9959935897435898 |

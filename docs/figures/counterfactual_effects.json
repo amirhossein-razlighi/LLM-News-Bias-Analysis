@@ -2,10 +2,10 @@
   "overall": [
     {
       "model": "ALL",
-      "n_pairs": 2276,
-      "label_sensitivity_rate": 0.47012302284710017,
-      "ci95_low": 0.45077987697715294,
-      "ci95_high": 0.4898945518453427
+      "n_pairs": 2252,
+      "label_sensitivity_rate": 0.46936056838365897,
+      "ci95_low": 0.4493783303730018,
+      "ci95_high": 0.49023090586145646
     }
   ],
   "by_model": [
@@ -39,10 +39,10 @@
     },
     {
       "model": "gemma4:latest",
-      "n_pairs": 335,
-      "label_sensitivity_rate": 0.4298507462686567,
-      "ci95_low": 0.382089552238806,
-      "ci95_high": 0.4806716417910447
+      "n_pairs": 311,
+      "label_sensitivity_rate": 0.4212218649517685,
+      "ci95_low": 0.3664790996784566,
+      "ci95_high": 0.47596463022508034
     },
     {
       "model": "phi4-mini:3.8b",

@@ -17,22 +17,15 @@
     "model": "gemma4:latest",
     "parse_status": "success",
     "error_category": "other",
-    "count": 1343,
-    "ratio_within_model": 0.5181327160493827
-  },
-  {
-    "model": "gemma4:latest",
-    "parse_status": "failed",
-    "error_category": "other",
-    "count": 1248,
-    "ratio_within_model": 0.48148148148148145
+    "count": 1247,
+    "ratio_within_model": 0.999198717948718
   },
   {
     "model": "gemma4:latest",
     "parse_status": "failed",
     "error_category": "invalid_or_missing_selected_article_id",
     "count": 1,
-    "ratio_within_model": 0.00038580246913580245
+    "ratio_within_model": 0.0008012820512820513
   },
   {
     "model": "llama3.2:3b",

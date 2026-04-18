@@ -22,7 +22,7 @@ models:
     timeout_seconds: 90
   - name: gemma4:latest
     temperature: 0.0
-    max_tokens: 300
+    max_tokens: 700
     timeout_seconds: 120
     think: false
   - name: mistral:latest

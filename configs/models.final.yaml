@@ -1,0 +1,31 @@
+models:
+  - name: qwen2.5:7b
+    temperature: 0.0
+    max_tokens: 300
+    timeout_seconds: 90
+  - name: qwen3:8b
+    temperature: 0.0
+    max_tokens: 300
+    timeout_seconds: 90
+    think: false
+  - name: gemma3:4b
+    temperature: 0.0
+    max_tokens: 300
+    timeout_seconds: 90
+  - name: phi4-mini:3.8b
+    temperature: 0.0
+    max_tokens: 300
+    timeout_seconds: 90
+  - name: llama3.2:3b
+    temperature: 0.0
+    max_tokens: 300
+    timeout_seconds: 90
+  - name: gemma4:latest
+    temperature: 0.0
+    max_tokens: 300
+    timeout_seconds: 120
+    think: false
+  - name: mistral:latest
+    temperature: 0.0
+    max_tokens: 300
+    timeout_seconds: 90

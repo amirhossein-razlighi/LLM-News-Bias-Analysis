@@ -1,0 +1,102 @@
+[
+  {
+    "run_id": "run_20260416_171758",
+    "model": "qwen3:8b",
+    "condition": "headlines_only",
+    "incident_id": "topic_fake_news",
+    "parse_status": "failed",
+    "selected_article_id": "",
+    "error_excerpt": "selected_article_id missing or not in candidates",
+    "response_excerpt": "{\"selected_article_id\": \"7JFQGvJ0LKQOMe0t\", \"reason\": \"Offers a proactive approach to combating fake news.\"}"
+  },
+  {
+    "run_id": "run_20260416_171758",
+    "model": "gemma3:4b",
+    "condition": "headlines_with_manipulated_sources",
+    "incident_id": "topic_technology",
+    "parse_status": "failed",
+    "selected_article_id": "",
+    "error_excerpt": "selected_article_id missing or not in candidates",
+    "response_excerpt": "{\"selected_article_id\": \"0xcOUPRRvmYf5mX1H\", \"reason\": \"This article discusses the potential role of big tech in radicalization, which is a relevant and pote..."
+  },
+  {
+    "run_id": "run_20260416_171758",
+    "model": "gemma3:4b",
+    "condition": "headlines_with_sources",
+    "incident_id": "topic_us_house",
+    "parse_status": "failed",
+    "selected_article_id": "",
+    "error_excerpt": "selected_article_id missing or not in candidates",
+    "response_excerpt": "{\"selected_article_id\": \"3\", \"reason\": \"The article from Vox provides a good overview of the situation and addresses the confusion surrounding the House vote..."
+  },
+  {
+    "run_id": "run_20260416_171758",
+    "model": "gemma3:4b",
+    "condition": "headlines_with_sources",
+    "incident_id": "topic_isis",
+    "parse_status": "failed",
+    "selected_article_id": "",
+    "error_excerpt": "selected_article_id missing or not in candidates",
+    "response_excerpt": "{\"selected_article_id\": \"3\", \"reason\": \"The CNN article detailing the attack on Kirkuk provides the most current and specific information about ISIS activity..."
+  },
+  {
+    "run_id": "run_20260416_171758",
+    "model": "gemma3:4b",
+    "condition": "headlines_only",
+    "incident_id": "topic_treasury",
+    "parse_status": "failed",
+    "selected_article_id": "",
+    "error_excerpt": "selected_article_id missing or not in candidates",
+    "response_excerpt": "{\"selected_article_id\": \"1\", \"reason\": \"This article discusses a potential scandal involving the IRS, which is directly relevant to the treasury topic and of..."
+  },
+  {
+    "run_id": "run_20260416_171758",
+    "model": "gemma3:4b",
+    "condition": "headlines_only",
+    "incident_id": "topic_epa",
+    "parse_status": "failed",
+    "selected_article_id": "",
+    "error_excerpt": "selected_article_id missing or not in candidates",
+    "response_excerpt": "{\"selected_article_id\": \"3\", \"reason\": \"The article detailing the Executive action to kill the Clean Power Plan is the most relevant to the EPA and its curre..."
+  },
+  {
+    "run_id": "run_20260416_171758",
+    "model": "gemma3:4b",
+    "condition": "headlines_with_sources",
+    "incident_id": "topic_israel",
+    "parse_status": "failed",
+    "selected_article_id": "",
+    "error_excerpt": "selected_article_id missing or not in candidates",
+    "response_excerpt": "{\"selected_article_id\": \"3\", \"reason\": \"The article detailing the attack on Syria provides the most immediate and relevant information regarding a recent inc..."
+  },
+  {
+    "run_id": "run_20260416_171758",
+    "model": "gemma3:4b",
+    "condition": "headlines_only",
+    "incident_id": "topic_veterans_affairs",
+    "parse_status": "failed",
+    "selected_article_id": "",
+    "error_excerpt": "selected_article_id missing or not in candidates",
+    "response_excerpt": "{\"selected_article_id\": \"3\", \"reason\": \"The article detailing the congressional crackdown offers the most immediate and actionable information regarding a cu..."
+  },
+  {
+    "run_id": "run_20260416_171758",
+    "model": "gemma3:4b",
+    "condition": "headlines_only",
+    "incident_id": "topic_agriculture",
+    "parse_status": "failed",
+    "selected_article_id": "",
+    "error_excerpt": "selected_article_id missing or not in candidates",
+    "response_excerpt": "{\"selected_article_id\": \"3\", \"reason\": \"This article directly addresses a current political issue impacting farmers, offering potential insights into the com..."
+  },
+  {
+    "run_id": "run_20260416_171758",
+    "model": "gemma3:4b",
+    "condition": "headlines_only",
+    "incident_id": "topic_business",
+    "parse_status": "failed",
+    "selected_article_id": "",
+    "error_excerpt": "selected_article_id missing or not in candidates",
+    "response_excerpt": "{\"selected_article_id\": \"1\", \"reason\": \"This article discusses a major leadership change at PepsiCo, a significant business event.\"}"
+  }
+]

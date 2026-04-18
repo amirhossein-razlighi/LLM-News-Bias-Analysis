@@ -1,33 +1,77 @@
-# NLP_Project
+# Sourcerers: Source-Selection Robustness in LLMs
 
-Local source-selection experiment pipeline with Ollama, a FastAPI analytics surface, and a Streamlit dashboard.
+A reproducible NLP experimentation framework for analyzing how LLMs choose among politically diverse news sources under controlled prompt conditions.
 
-## Public Deployment
+This repository supports:
 
-The simplest shareable deployment target for this repo is Streamlit Community Cloud.
+- Offline incident preparation from real news JSON files.
+- Condition-controlled prompt construction for source-selection experiments.
+- Multi-model evaluation via local Ollama models.
+- Analytics through Streamlit and FastAPI.
+- Report-ready artifacts (plots + summary tables) generated from saved runs.
 
-- Deploy `dashboard.py` from the repository root at [share.streamlit.io/new](https://share.streamlit.io/new).
-- The deployed Streamlit app now embeds the analytics logic directly, so it does not need a separately hosted API server.
-- When the app starts, it syncs checked-in `outputs/run_*` folders into `experiment_database.csv` automatically.
-- The FastAPI app is still kept in the repo for local demos, presentation material, and client integration examples.
+## 1) Why This Project Exists
 
-For Community Cloud, the root `requirements.txt` is the deployment dependency file.
+Modern LLMs can appear neutral while still exhibiting selection bias, source-identity overreliance, or prompt-format sensitivity. This project tests those risks directly by asking models to choose one article from left/center/right candidates across multiple controlled conditions.
 
-## Run And See Results
+Core research intent:
 
-If you want the fastest path from setup to visible results, do this.
+- Measure robustness of model choices when source labels are manipulated.
+- Compare inter-model behavior under identical candidate sets.
+- Track reliability signals such as parse stability and latency.
 
-### 1) Install dependencies
+## 2) Project Scope And Pipeline
+
+### Input Data
+
+- Real incidents are built from JSON articles in data/jsons.
+- The preparation step groups topic-level incidents that include left, center, and right coverage.
+
+### Experimental Conditions
+
+- headlines_only
+- headlines_with_sources
+- sources_only
+- headlines_with_manipulated_sources
+
+These conditions isolate content effects vs source-identity effects.
+
+### Output Artifacts Per Run
+
+Each run folder in outputs/run_YYYYMMDD_HHMMSS includes:
+
+- experiment_requests.jsonl
+- model_decisions.jsonl
+- raw_outputs.jsonl
+
+These files are enough to fully reproduce downstream analytics and plots.
+
+## 3) Repository Structure (Key Files)
+
+- dashboard.py: Streamlit interface for analytics and experiment execution.
+- app/cli/prepare_real_incidents.py: Converts raw article JSON data into experiment-ready incidents.
+- app/cli/run_experiments.py: Runs condition/model combinations and writes run artifacts.
+- app/cli/generate_report_assets.py: Builds report plots and summary tables from outputs.
+- app/api/engine_analytics.py: Ingestion + metrics engine used by API and dashboard.
+- configs/models.example.yaml: Manifest of Ollama models and decoding params.
+- docs/figures/: Generated report assets (plots and summary metrics).
+
+## 4) Quickstart (Reproducible)
+
+### Prerequisites
+
+- Python 3.10
+- Ollama installed locally
+- uv package manager
+
+### Setup
 
 ```bash
 uv venv --python 3.10
 uv sync
-uv add streamlit plotly
 ```
 
-### 2) Pull the Ollama models you want to compare
-
-Example:
+### Pull Models (example)
 
 ```bash
 ollama pull qwen2.5:7b
@@ -35,271 +79,216 @@ ollama pull qwen3:8b
 ollama pull gemma3:4b
 ```
 
-If you are using the current default manifest, also make sure every model in `configs/models.example.yaml` is pulled locally.
-
-### 3) Start Ollama
-
-In terminal 1:
+### Start Ollama
 
 ```bash
 ollama serve
 ```
 
-### 4) Start the Streamlit dashboard
-
-In terminal 2:
+### Run Dashboard
 
 ```bash
 uv run streamlit run dashboard.py
 ```
 
-Then open:
-
-- http://localhost:8501
-
-### 5) Prepare real data
-
-In terminal 3:
+### Run Tests
 
 ```bash
-uv run python -m app.cli.prepare_real_incidents --json-dir data/jsons --output data/real_incidents_all.jsonl --min-per-leaning 3 --max-articles-per-leaning 8
+uv run pytest -q
 ```
 
-### 6) Run the experiment
+## 5) End-To-End CLI Workflow
 
-```bash
-uv run python -m app.cli.run_experiments --input data/real_incidents_all.jsonl --models-manifest configs/models.example.yaml --output-dir outputs --conditions headlines_only headlines_with_sources sources_only headlines_with_manipulated_sources --max-combinations 3 --seed 42
-```
-
-This creates a new folder like:
-
-```text
-outputs/run_YYYYMMDD_HHMMSS/
-```
-
-with:
-
-- `experiment_requests.jsonl`
-- `model_decisions.jsonl`
-- `raw_outputs.jsonl`
-
-### 7) Ingest the run and view the results
-
-Use the Streamlit sidebar:
-
-- In the Streamlit sidebar, click `Ingest all runs in outputs`
-
-Then go to the `Analytics` tab in Streamlit to compare models, conditions, latency, parse success, outlet preferences, and leaning-selection behavior.
-
-## Setup
-
-### 1) Install uv (if needed)
-
-```bash
-brew install uv
-```
-
-### 2) Create env and install dependencies
-
-```bash
-uv venv --python 3.10
-uv sync
-```
-
-### 3) Install dashboard dependencies (one-time)
-
-```bash
-uv add streamlit plotly
-```
-
-### 4) Run tests
-
-```bash
-uv run pytest
-```
-
-## Ollama Prerequisites
-
-Start Ollama in a separate terminal:
-
-```bash
-ollama serve
-```
-
-Pull models you plan to use (example):
-
-```bash
-ollama pull qwen2.5:7b
-```
-
-Pull all the models inside `configs/models.example.yaml` if you want to use the current default manifest.
-
-List local models:
-
-```bash
-uv run python -m app.cli.list_models
-```
-
-## Fast End-to-End Path
-
-1. Start Ollama: `ollama serve`
-2. Start dashboard: `uv run streamlit run dashboard.py`
-3. In dashboard sidebar, click **Ingest all runs in outputs**
-4. View charts in **Analytics** tab
-5. Run new jobs in **Run Models** tab
-
-## CLI Workflow
-
-Probe one model quickly:
-
-```bash
-uv run python -m app.cli.probe_model \
-	--model qwen2.5:7b \
-	--prompt "Return strict JSON with selected_article_id and reason."
-```
-
-Run a full experiment:
+### A. Prepare incidents from raw JSON
 
 ```bash
 uv run python -m app.cli.prepare_real_incidents \
-	--json-dir data/jsons \
-	--split-file data/splits/random/train.tsv \
-	--output data/real_incidents_random_train.jsonl \
-	--min-per-leaning 3 \
-	--max-articles-per-leaning 8
+  --json-dir data/jsons \
+  --output data/real_incidents_all.jsonl \
+  --min-per-leaning 3 \
+  --max-articles-per-leaning 8
+```
 
+### B. Run experiments
+
+```bash
 uv run python -m app.cli.run_experiments \
-	--input data/real_incidents_random_train.jsonl \
-	--models-manifest configs/models.example.yaml \
-	--output-dir outputs \
-	--conditions headlines_only headlines_with_sources sources_only headlines_with_manipulated_sources \
-	--max-combinations 3 \
-	--seed 42
+  --input data/real_incidents_all.jsonl \
+  --models-manifest configs/models.example.yaml \
+  --output-dir outputs \
+  --conditions headlines_only headlines_with_sources sources_only headlines_with_manipulated_sources \
+  --max-combinations 3 \
+  --seed 42
 ```
 
-Notes for real data:
-
-- `app.cli.prepare_real_incidents` groups `data/jsons/*.json` by topic and keeps topics that have left/center/right coverage.
-- Use `data/splits/random/*.tsv` or `data/splits/media/*.tsv` with `--split-file` if you want to stay inside one dataset split.
-- `--max-articles-per-leaning` keeps each incident bounded so the runner does not build an enormous search space for large topics like `elections`.
-
-Candidate order randomization:
-
-- Enabled by default for position-bias control.
-- Disable with `--no-shuffle-candidates`.
-
-Benchmark latency across models:
+### C. Generate report assets from saved outputs
 
 ```bash
-uv run python -m app.cli.benchmark_models \
-	--models qwen2.5:7b \
-	--prompt "Return strict JSON only." \
-	--rounds 3
+uv run python -m app.cli.generate_report_assets \
+  --outputs-dir outputs \
+  --assets-dir docs/figures
 ```
 
-## Output Files
+## 6) Evaluation Protocol
 
-Each run writes:
+### Main Evaluation Signals
 
-- `outputs/run_YYYYMMDD_HHMMSS/experiment_requests.jsonl`
-- `outputs/run_YYYYMMDD_HHMMSS/model_decisions.jsonl`
-- `outputs/run_YYYYMMDD_HHMMSS/raw_outputs.jsonl`
+- Parse reliability: success/fallback/failure rates from structured response parsing. (Strict JSON)
+- Latency: mean and p95 latency per model.
+- Selection distribution: left/center/right choice ratios.
+- Robustness proxy: sensitivity to manipulated source labels.
+- Position effect signal: selected candidate index distribution.
 
-`experiment_requests.jsonl` includes `candidate_order` for position-bias analysis.
+### Baseline Included
 
-## Analytics API
+The report assets include a candidate-mix random baseline for center selection:
 
-The dashboard deployment does not require the API server, but the FastAPI app remains available under `app/api/engine_analytics.py`.
+- Baseline center rate = mean proportion of center candidates offered to the model.
+- Model center selection rates are compared against this baseline.
 
-Run API server locally:
+This baseline is simple but useful to detect models selecting center above or below chance given candidate availability.
+
+## 7) Current Empirical Snapshot (From outputs/)
+
+Generated from existing run artifacts in this repository using app/cli/generate_report_assets.py.
+
+### Dataset coverage in current snapshot
+
+- Decisions: 9312
+- Runs: 6
+- Models: 7
+- Conditions: 4
+
+### Aggregate parser health
+
+- Parse success: 84.91%
+- Parse failure: 14.74%
+
+### Model summary table
+
+| model | n | parse_success_rate | parse_fallback_rate | parse_failure_rate | avg_latency_ms | p95_latency_ms | center_selection_rate |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| qwen2.5:7b | 1344 | 99.93% | 0.00% | 0.07% | 11668 | 14992 | 38.35% |
+| qwen3:8b | 1344 | 99.93% | 0.00% | 0.07% | 9494 | 11139 | 30.68% |
+| mistral:latest | 1248 | 99.60% | 0.00% | 0.40% | 3036 | 3576 | 49.32% |
+| gemma3:4b | 1344 | 99.33% | 0.00% | 0.67% | 5964 | 6831 | 40.97% |
+| phi4-mini:3.8b | 1344 | 96.58% | 2.38% | 1.04% | 2189 | 2717 | 37.22% |
+| llama3.2:3b | 1344 | 92.93% | 0.00% | 7.07% | 1572 | 1993 | 41.15% |
+| gemma4:latest | 1344 | 7.14% | 0.00% | 92.86% | 2906 | 3490 | 50.00% |
+
+## 8) Generated Figures
+
+### Parse reliability by model
+
+![Parse reliability by model](docs/figures/parse_success_by_model.png)
+
+### Latency by model (average and p95)
+
+![Latency by model](docs/figures/latency_by_model.png)
+
+### Selection mix by condition
+
+![Selection mix by condition](docs/figures/condition_bucket_mix.png)
+
+### Center selection vs baseline
+
+![Center selection vs baseline](docs/figures/center_vs_baseline.png)
+
+## 9) FastAPI Analytics (Optional)
+
+Run API locally:
 
 ```bash
 uv run uvicorn app.api.engine_analytics:app --host 0.0.0.0 --port 8000 --reload
 ```
 
-Example requests:
+Useful endpoints:
+
+- GET /metrics/inter-model
+- GET /metrics/summary
+- GET /metrics/conditions-by-model
+- POST /ingest/run
+- POST /ingest/runs
+
+Docs:
+
+- <http://127.0.0.1:8000/docs>
+- <http://127.0.0.1:8000/redoc>
+
+## 10) CI (GitHub Actions)
+
+This repository includes a reliability-focused CI pipeline under .github/workflows.
+
+### CI workflow
+
+File: .github/workflows/ci.yml
+
+Runs on every push to main and on pull requests. It enforces reliability by:
+
+- Installing dependencies with uv in a clean environment.
+- Running the test suite.
+- Regenerating analytics artifacts from outputs.
+- Validating summary.json schema and metric ranges.
+- Validating generated report artifacts (summary table, qualitative errors, limitations).
+- Uploading report assets as a workflow artifact.
+
+## 11) Streamlit Dashboard Publishing
+
+If you publish dashboard.py via Streamlit Community Cloud:
+
+- Keep dashboard.py as the app entrypoint.
+- Point Streamlit Cloud to this repository.
+- Use requirements.txt for dependency installation.
+
+## 12) Public FastAPI Deployment
+
+The analytics API can be published separately so others can access your metrics endpoints.
+
+### Option A: Render (recommended quick path)
+
+This repo includes render.yaml for one-click web service deployment.
+
+Steps:
+
+1. Connect this repository in Render.
+2. Select Blueprint deploy (it will read render.yaml).
+3. After deploy, use:
+
+- /docs for Swagger UI
+- /redoc for ReDoc
+
+1. Optional safety defaults already set in render.yaml:
+
+- ENABLE_ANALYTICS_WRITE_ENDPOINTS=0
+- API_ALLOW_ORIGINS=*
+
+### Option B: Any container/PaaS
+
+Run the same API command with platform port binding:
 
 ```bash
-curl http://127.0.0.1:8000/metrics/inter-model
-
-curl "http://127.0.0.1:8000/metrics/conditions-by-model?run_id=run_20260414_103158"
-
-curl -X POST http://127.0.0.1:8000/ingest/runs \
-  -H "Content-Type: application/json" \
-  -d '{"outputs_dir":"outputs"}'
+uvicorn app.api.engine_analytics:app --host 0.0.0.0 --port $PORT
 ```
+
+Useful public endpoints:
+
+- GET /metrics/summary
+- GET /metrics/inter-model
+- GET /metrics/conditions-by-model
+
+## 13) Reproducibility Freeze
+
+Final reporting now supports reproducibility metadata using:
+
+- Frozen manifest: configs/models.final.yaml
+- Frozen seed: 42
+
+Generate enriched report assets (with confidence intervals, qualitative error samples, and limitations):
 
 ```bash
-uv run uvicorn app.api.engine_analytics:app --host 0.0.0.0 --port 8000 --reload
+uv run python -m app.cli.generate_report_assets \
+  --outputs-dir outputs \
+  --assets-dir docs/figures \
+  --frozen-manifest configs/models.final.yaml \
+  --frozen-seed 42
 ```
-
-Browser docs:
-
-- http://127.0.0.1:8000/docs
-- http://127.0.0.1:8000/redoc
-
-### API Endpoints
-
-- `POST /ingest`
-  - Ingests already-normalized analytics rows (`ExperimentResult` schema).
-
-- `POST /ingest/run`
-  - Ingests one run directory containing:
-  - `model_decisions.jsonl`
-  - `experiment_requests.jsonl`
-  - Automatically maps pipeline fields to analytics fields.
-
-- `POST /ingest/runs`
-  - Bulk-ingests all `run_*` folders under an outputs directory.
-  - Default `outputs_dir` is `outputs`.
-
-- `GET /metrics/summary`
-  - Returns aggregate metrics over ingested data.
-  - Optional query parameter: `model`.
-
-- `GET /metrics/inter-model`
-  - Returns metrics split by model.
-
-- `GET /metrics/runs`
-  - Lists ingested run IDs.
-
-- `GET /export/csv`
-  - Returns path to the analytics CSV database.
-
-## Streamlit Dashboard
-
-Run dashboard:
-
-```bash
-uv run streamlit run dashboard.py
-```
-
-Open in browser:
-
-- http://localhost:8501
-
-### Dashboard Features
-
-- **Analytics tab**
-  - Summary cards and distributions.
-  - Inter-model comparison table and charts.
-  - Run ID listing.
-
-- **Run Models tab**
-  - Probe Model: single prompt call using project Ollama client.
-  - Batch Experiment: full run using existing experiment builders, parser, and Pydantic schemas.
-  - Optional auto-ingest after batch completion.
-
-- **Sidebar ingest tools**
-  - Bulk ingest all runs from `outputs` (default first-try path).
-  - Single-run ingest by explicit run directory.
-
-## Data Contracts
-
-Core schemas are in `app/schemas/models.py`:
-
-- `PreparedIncident`
-- `ExperimentRequest`
-- `ModelDecision`
-
-These are the integration boundary between experiment execution, storage, and analytics.

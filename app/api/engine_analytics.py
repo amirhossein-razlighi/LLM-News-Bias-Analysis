@@ -203,6 +203,9 @@ def calculate_all_metrics(df: pd.DataFrame):
     latency_p50 = _safe_float(latency.quantile(0.5)) if not latency.empty else 0.0
     latency_p95 = _safe_float(latency.quantile(0.95)) if not latency.empty else 0.0
     unknown_bucket_rate = _safe_float((data["selected_bucket"] == "unknown").mean()) if "selected_bucket" in data.columns else 0.0
+    label_sensitivity_rate = _label_sensitivity_rate(data)
+    cross_model_agreement_rate, cross_model_instability = _cross_model_agreement(data)
+    model_instability_score = _model_instability_score(data)
 
     return {
         "selection_distribution": counts,
@@ -219,6 +222,10 @@ def calculate_all_metrics(df: pd.DataFrame):
         "p50_latency_ms": latency_p50,
         "p95_latency_ms": latency_p95,
         "unknown_bucket_rate": unknown_bucket_rate,
+        "label_sensitivity_rate": label_sensitivity_rate,
+        "cross_model_agreement_rate": cross_model_agreement_rate,
+        "cross_model_instability": cross_model_instability,
+        "model_instability_score": model_instability_score,
     }
 
 
@@ -418,6 +425,67 @@ def _top_outlets_by_model(df: pd.DataFrame, limit: int = 10) -> List[dict]:
                 }
             )
     return sorted(rows, key=lambda row: (row["model"], -row["count"], row["selected_outlet"]))
+
+
+def _label_sensitivity_rate(df: pd.DataFrame) -> float:
+    required_conditions = {"headlines_sources", "swapped_sources"}
+    scoped = df[df["condition"].isin(required_conditions)].copy()
+    scoped = scoped[scoped["selected_bucket"].isin(["left", "center", "right"])]
+    if scoped.empty:
+        return 0.0
+
+    key_cols = ["run_id", "model_name", "incident_id", "candidate_signature"]
+    pivot = scoped.pivot_table(index=key_cols, columns="condition", values="selected_bucket", aggfunc="first")
+    if "headlines_sources" not in pivot.columns or "swapped_sources" not in pivot.columns:
+        return 0.0
+    pivot = pivot.dropna(subset=["headlines_sources", "swapped_sources"])
+    if pivot.empty:
+        return 0.0
+    changed = (pivot["headlines_sources"] != pivot["swapped_sources"]).astype(float)
+    return _safe_float(changed.mean())
+
+
+def _cross_model_agreement(df: pd.DataFrame) -> tuple[float, float]:
+    known = df[df["selected_bucket"].isin(["left", "center", "right"])].copy()
+    if known.empty:
+        return 0.0, 0.0
+
+    agreements: List[float] = []
+    entropies: List[float] = []
+    for _, group in known.groupby(["run_id", "incident_id", "condition"], dropna=False):
+        n = len(group)
+        if n < 2:
+            continue
+        probs = group["selected_bucket"].value_counts(normalize=True)
+        agreements.append(float(probs.max()))
+        entropy = float(-(probs * np.log2(probs + 1e-12)).sum()) / float(np.log2(3))
+        entropies.append(max(0.0, min(1.0, entropy)))
+
+    if not agreements:
+        return 0.0, 0.0
+    return _safe_float(float(np.mean(agreements))), _safe_float(float(np.mean(entropies)))
+
+
+def _model_instability_score(df: pd.DataFrame) -> float:
+    known = df[df["selected_bucket"].isin(["left", "center", "right"])].copy()
+    if known.empty:
+        return 0.0
+
+    model_scores: List[float] = []
+    for _, model_group in known.groupby("model_name", dropna=False):
+        incident_scores: List[float] = []
+        for _, group in model_group.groupby(["run_id", "incident_id"], dropna=False):
+            n_conditions = int(group["condition"].nunique())
+            if n_conditions < 2:
+                continue
+            n_unique = int(group["selected_bucket"].nunique())
+            incident_scores.append((n_unique - 1) / (n_conditions - 1))
+        if incident_scores:
+            model_scores.append(float(np.mean(incident_scores)))
+
+    if not model_scores:
+        return 0.0
+    return _safe_float(float(np.mean(model_scores)))
 
 
 def _sample_records(df: pd.DataFrame, limit: int = 100) -> List[dict]:
@@ -694,6 +762,48 @@ async def get_run_ids():
         return {"runs": []}
     runs = [r for r in df["run_id"].dropna().astype(str).unique().tolist() if r]
     return {"runs": sorted(runs)}
+
+
+@app.get("/metrics/compare-runs")
+async def compare_runs(run_a: str, run_b: str, model: Optional[str] = None):
+    if not run_a or not run_b:
+        raise HTTPException(status_code=400, detail="run_a and run_b are required")
+
+    df = load_db()
+    if df.empty:
+        raise HTTPException(status_code=404, detail="No analytics data available")
+
+    scoped = _apply_filters(df, model=model)
+    a_df = _apply_filters(scoped, run_id=run_a)
+    b_df = _apply_filters(scoped, run_id=run_b)
+    if a_df.empty or b_df.empty:
+        raise HTTPException(status_code=404, detail="One or both runs were not found in the selected scope")
+
+    a_metrics = calculate_all_metrics(a_df)
+    b_metrics = calculate_all_metrics(b_df)
+    comparable_keys = [
+        "parse_success_rate",
+        "parse_failure_rate",
+        "avg_latency_ms",
+        "p95_latency_ms",
+        "center_preference_index",
+        "content_robustness_score",
+        "label_sensitivity_rate",
+        "cross_model_agreement_rate",
+        "cross_model_instability",
+        "model_instability_score",
+    ]
+    delta = {
+        key: _safe_float(b_metrics.get(key, 0.0) - a_metrics.get(key, 0.0))
+        for key in comparable_keys
+    }
+
+    return {
+        "scope": {"run_a": run_a, "run_b": run_b, "model": model or "ALL"},
+        "run_a": {"count": int(len(a_df)), "metrics": a_metrics},
+        "run_b": {"count": int(len(b_df)), "metrics": b_metrics},
+        "delta_run_b_minus_run_a": delta,
+    }
 
 
 @app.get("/export/csv")

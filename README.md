@@ -138,6 +138,8 @@ uv run python -m app.cli.generate_report_assets \
 - Selection distribution: left/center/right choice ratios.
 - Robustness proxy: sensitivity to manipulated source labels.
 - Position effect signal: selected candidate index distribution.
+- Counterfactual label sensitivity: change rate between real-source vs swapped-source conditions.
+- Cross-model agreement and instability: entropy-based disagreement across models on the same incident.
 
 ### Baseline Included
 
@@ -190,9 +192,33 @@ Generated from existing run artifacts in this repository using app/cli/generate_
 
 ![Selection mix by condition](docs/figures/condition_bucket_mix.png)
 
+### Center delta heatmap (model x condition)
+
+![Center delta heatmap](docs/figures/center_delta_heatmap.png)
+
+### Reliability-speed Pareto (bubble = instability)
+
+![Reliability-speed Pareto](docs/figures/reliability_speed_pareto.png)
+
+### Parse reliability calibration
+
+![Parse reliability calibration](docs/figures/parse_reliability_calibration.png)
+
 ### Center selection vs baseline
 
 ![Center selection vs baseline](docs/figures/center_vs_baseline.png)
+
+### Condition to selected-leaning Sankey (interactive)
+
+- [Open interactive Sankey](docs/figures/condition_to_bucket_sankey.html)
+
+### Additional generated analysis assets
+
+- [Counterfactual effects table](docs/figures/counterfactual_effects.md)
+- [Cross-model agreement table](docs/figures/cross_model_agreement.md)
+- [Failure taxonomy table](docs/figures/failure_taxonomy.md)
+- [Model instability table](docs/figures/model_instability.md)
+- [Qualitative error examples](docs/figures/qualitative_errors.md)
 
 ## 9) FastAPI Analytics (Optional)
 
@@ -207,6 +233,7 @@ Useful endpoints:
 - GET /metrics/inter-model
 - GET /metrics/summary
 - GET /metrics/conditions-by-model
+- GET /metrics/compare-runs?run_a=...&run_b=...
 - POST /ingest/run
 - POST /ingest/runs
 

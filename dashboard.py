@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -255,6 +256,19 @@ def metrics_cards(metrics: dict[str, Any], total_count: int) -> None:
     c6.metric("Robustness", f"{metrics.get('content_robustness_score', 0.0):.3f}")
 
 
+def takeaway_panel(metrics: dict[str, Any]) -> None:
+    bias_sensitivity_index = float(metrics.get("label_sensitivity_rate", metrics.get("identity_dominance_rate", 0.0)))
+    reliability_index = float(metrics.get("parse_success_rate", 0.0))
+    avg_latency = float(metrics.get("avg_latency_ms", 0.0))
+    speed_index = 1.0 / (1.0 + max(0.0, avg_latency) / 1000.0)
+
+    st.subheader("Takeaway Panel")
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Bias Sensitivity Index", f"{bias_sensitivity_index:.3f}")
+    c2.metric("Reliability Index", f"{reliability_index:.3f}")
+    c3.metric("Speed Index", f"{speed_index:.3f}")
+
+
 def render_distribution_charts(metrics: dict[str, Any]) -> None:
     selection_distribution = metrics.get("selection_distribution", {})
     if selection_distribution:
@@ -313,6 +327,10 @@ def render_inter_model_overview(inter_model_data: dict[str, Any]) -> None:
                 "selection_stability_score": metrics.get("selection_stability_score", 0.0),
                 "identity_dominance_rate": metrics.get("identity_dominance_rate", 0.0),
                 "content_robustness_score": metrics.get("content_robustness_score", 0.0),
+                "label_sensitivity_rate": metrics.get("label_sensitivity_rate", 0.0),
+                "cross_model_agreement_rate": metrics.get("cross_model_agreement_rate", 0.0),
+                "cross_model_instability": metrics.get("cross_model_instability", 0.0),
+                "model_instability_score": metrics.get("model_instability_score", 0.0),
             }
         )
 
@@ -327,6 +345,90 @@ def render_inter_model_overview(inter_model_data: dict[str, Any]) -> None:
             st.metric("Parse success", f"{row['parse_success_rate']:.1%}")
             st.metric("Avg latency", f"{row['avg_latency_ms']:.0f} ms")
             st.metric("Robustness", f"{row['content_robustness_score']:.3f}")
+
+    objective_options = {
+        "Most reliable": ("parse_success_rate", False),
+        "Fastest": ("avg_latency_ms", True),
+        "Least label-sensitive": ("label_sensitivity_rate", True),
+        "Most robust": ("content_robustness_score", False),
+        "Most stable": ("model_instability_score", True),
+    }
+    objective = st.selectbox(
+        "Best model objective",
+        options=list(objective_options.keys()),
+        key="best_model_objective",
+    )
+    sort_col, ascending = objective_options[objective]
+    ranking = inter_df[["model", sort_col, "parse_success_rate", "avg_latency_ms", "content_robustness_score"]].sort_values(sort_col, ascending=ascending)
+    st.markdown("**Objective Ranking**")
+    st.dataframe(ranking, use_container_width=True, hide_index=True)
+
+
+def _overlap_score(incident_id: str, reason: str) -> float:
+    incident_tokens = [t for t in re.split(r"[_\W]+", str(incident_id).lower()) if len(t) >= 4]
+    if not incident_tokens:
+        return 0.0
+    reason_tokens = set(re.findall(r"[a-zA-Z]{4,}", str(reason).lower()))
+    if not reason_tokens:
+        return 0.0
+    overlap = sum(1 for t in incident_tokens if t in reason_tokens)
+    return float(overlap / len(incident_tokens))
+
+
+def render_scenario_simulator(selected_run: str) -> None:
+    df = load_db()
+    df = _apply_filters(df, run_id=selected_run or None)
+    if df.empty:
+        st.info("No data available for scenario simulation.")
+        return
+
+    st.subheader("Scenario Simulator")
+    incidents = sorted(df["incident_id"].dropna().astype(str).unique().tolist())
+    incident_id = st.selectbox("Incident", options=incidents, key="scenario_incident")
+    incident_df = df[df["incident_id"] == incident_id].copy()
+    conditions = sorted(incident_df["condition"].dropna().astype(str).unique().tolist())
+    condition = st.selectbox("Condition", options=conditions, key="scenario_condition")
+    scoped = incident_df[incident_df["condition"] == condition].copy()
+
+    if scoped.empty:
+        st.info("No records for selected scenario.")
+        return
+
+    dist = (
+        scoped[scoped["selected_bucket"].isin(["left", "center", "right"])]
+        .groupby(["model_name", "selected_bucket"], dropna=False)
+        .size()
+        .reset_index(name="count")
+    )
+    if not dist.empty:
+        fig = px.bar(
+            dist,
+            x="model_name",
+            y="count",
+            color="selected_bucket",
+            barmode="group",
+            title="Selected Leaning by Model for Scenario",
+            color_discrete_map={"left": "#d62728", "center": "#2ca02c", "right": "#1f77b4"},
+        )
+        st.plotly_chart(fig, use_container_width=True)
+
+    explain = scoped[[
+        "model_name",
+        "selected_article_id",
+        "selected_outlet",
+        "selected_bucket",
+        "justification",
+        "parse_status",
+        "latency_ms",
+    ]].copy()
+    explain["reason_excerpt"] = explain["justification"].fillna("").astype(str).str.slice(0, 180)
+    explain["keyword_overlap"] = explain.apply(
+        lambda row: _overlap_score(incident_id, row.get("justification", "")),
+        axis=1,
+    )
+    explain = explain.drop(columns=["justification"])
+    st.markdown("**Explainability Snippets**")
+    st.dataframe(explain, use_container_width=True, hide_index=True)
 
 
 def render_condition_metrics_by_model(rows: list[dict[str, Any]]) -> None:
@@ -727,6 +829,9 @@ curl -X POST http://127.0.0.1:8000/ingest/runs \\
         snapshot = None
 
     if snapshot is not None:
+        metrics_cards(snapshot["metrics"], snapshot["count"])
+        takeaway_panel(snapshot["metrics"])
+
         st.subheader("Runs")
         if snapshot["runs"]:
             st.code("\n".join(snapshot["runs"]))
@@ -757,6 +862,8 @@ curl -X POST http://127.0.0.1:8000/ingest/runs \\
 
         render_filter_scope(selected_run, label="Recent records scope")
         render_sample_records(snapshot["records"])
+        render_filter_scope(selected_run, label="Scenario simulation scope")
+        render_scenario_simulator(selected_run)
 
 with runner_tab:
     if IS_STREAMLIT_CLOUD:

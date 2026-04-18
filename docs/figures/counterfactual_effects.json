@@ -1,0 +1,62 @@
+{
+  "overall": [
+    {
+      "model": "ALL",
+      "n_pairs": 2276,
+      "label_sensitivity_rate": 0.47012302284710017,
+      "ci95_low": 0.45077987697715294,
+      "ci95_high": 0.4898945518453427
+    }
+  ],
+  "by_model": [
+    {
+      "model": "llama3.2:3b",
+      "n_pairs": 298,
+      "label_sensitivity_rate": 0.5268456375838926,
+      "ci95_low": 0.47315436241610737,
+      "ci95_high": 0.5838926174496645
+    },
+    {
+      "model": "mistral:latest",
+      "n_pairs": 310,
+      "label_sensitivity_rate": 0.5258064516129032,
+      "ci95_low": 0.46766129032258064,
+      "ci95_high": 0.5806451612903226
+    },
+    {
+      "model": "gemma3:4b",
+      "n_pairs": 332,
+      "label_sensitivity_rate": 0.5030120481927711,
+      "ci95_low": 0.44879518072289154,
+      "ci95_high": 0.5572289156626506
+    },
+    {
+      "model": "qwen2.5:7b",
+      "n_pairs": 335,
+      "label_sensitivity_rate": 0.4955223880597015,
+      "ci95_low": 0.4417910447761194,
+      "ci95_high": 0.5492537313432836
+    },
+    {
+      "model": "gemma4:latest",
+      "n_pairs": 335,
+      "label_sensitivity_rate": 0.4298507462686567,
+      "ci95_low": 0.382089552238806,
+      "ci95_high": 0.4806716417910447
+    },
+    {
+      "model": "phi4-mini:3.8b",
+      "n_pairs": 330,
+      "label_sensitivity_rate": 0.41515151515151516,
+      "ci95_low": 0.3606060606060606,
+      "ci95_high": 0.4636363636363636
+    },
+    {
+      "model": "qwen3:8b",
+      "n_pairs": 336,
+      "label_sensitivity_rate": 0.40476190476190477,
+      "ci95_low": 0.3482142857142857,
+      "ci95_high": 0.45535714285714285
+    }
+  ]
+}

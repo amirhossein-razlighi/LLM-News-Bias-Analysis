@@ -1,0 +1,30 @@
+[
+  {
+    "condition": "headlines_only",
+    "n_groups": 432,
+    "mean_agreement_rate": 0.6414700911228688,
+    "mean_normalized_entropy": 0.631498570095863,
+    "instability_score": 0.631498570095863
+  },
+  {
+    "condition": "headlines_with_manipulated_sources",
+    "n_groups": 432,
+    "mean_agreement_rate": 0.626318158436214,
+    "mean_normalized_entropy": 0.6497662924744237,
+    "instability_score": 0.6497662924744237
+  },
+  {
+    "condition": "headlines_with_sources",
+    "n_groups": 432,
+    "mean_agreement_rate": 0.6573596413874192,
+    "mean_normalized_entropy": 0.610695777384239,
+    "instability_score": 0.610695777384239
+  },
+  {
+    "condition": "sources_only",
+    "n_groups": 432,
+    "mean_agreement_rate": 0.7486405055849501,
+    "mean_normalized_entropy": 0.45685136823654704,
+    "instability_score": 0.45685136823654704
+  }
+]

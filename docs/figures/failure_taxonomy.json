@@ -1,0 +1,114 @@
+[
+  {
+    "model": "gemma3:4b",
+    "parse_status": "success",
+    "error_category": "other",
+    "count": 1335,
+    "ratio_within_model": 0.9933035714285714
+  },
+  {
+    "model": "gemma3:4b",
+    "parse_status": "failed",
+    "error_category": "invalid_or_missing_selected_article_id",
+    "count": 9,
+    "ratio_within_model": 0.006696428571428571
+  },
+  {
+    "model": "gemma4:latest",
+    "parse_status": "success",
+    "error_category": "other",
+    "count": 1343,
+    "ratio_within_model": 0.5181327160493827
+  },
+  {
+    "model": "gemma4:latest",
+    "parse_status": "failed",
+    "error_category": "other",
+    "count": 1248,
+    "ratio_within_model": 0.48148148148148145
+  },
+  {
+    "model": "gemma4:latest",
+    "parse_status": "failed",
+    "error_category": "invalid_or_missing_selected_article_id",
+    "count": 1,
+    "ratio_within_model": 0.00038580246913580245
+  },
+  {
+    "model": "llama3.2:3b",
+    "parse_status": "success",
+    "error_category": "other",
+    "count": 1249,
+    "ratio_within_model": 0.9293154761904762
+  },
+  {
+    "model": "llama3.2:3b",
+    "parse_status": "failed",
+    "error_category": "invalid_or_missing_selected_article_id",
+    "count": 95,
+    "ratio_within_model": 0.07068452380952381
+  },
+  {
+    "model": "mistral:latest",
+    "parse_status": "success",
+    "error_category": "other",
+    "count": 1243,
+    "ratio_within_model": 0.9959935897435898
+  },
+  {
+    "model": "mistral:latest",
+    "parse_status": "failed",
+    "error_category": "invalid_or_missing_selected_article_id",
+    "count": 5,
+    "ratio_within_model": 0.004006410256410256
+  },
+  {
+    "model": "phi4-mini:3.8b",
+    "parse_status": "success",
+    "error_category": "other",
+    "count": 1298,
+    "ratio_within_model": 0.9657738095238095
+  },
+  {
+    "model": "phi4-mini:3.8b",
+    "parse_status": "fallback",
+    "error_category": "fallback_after_malformed_json",
+    "count": 32,
+    "ratio_within_model": 0.023809523809523808
+  },
+  {
+    "model": "phi4-mini:3.8b",
+    "parse_status": "failed",
+    "error_category": "invalid_or_missing_selected_article_id",
+    "count": 14,
+    "ratio_within_model": 0.010416666666666666
+  },
+  {
+    "model": "qwen2.5:7b",
+    "parse_status": "success",
+    "error_category": "other",
+    "count": 1343,
+    "ratio_within_model": 0.9992559523809523
+  },
+  {
+    "model": "qwen2.5:7b",
+    "parse_status": "failed",
+    "error_category": "other",
+    "count": 1,
+    "ratio_within_model": 0.000744047619047619
+  },
+  {
+    "model": "qwen3:8b",
+    "parse_status": "success",
+    "error_category": "other",
+    "count": 1343,
+    "ratio_within_model": 0.9992559523809523
+  },
+  {
+    "model": "qwen3:8b",
+    "parse_status": "failed",
+    "error_category": "invalid_or_missing_selected_article_id",
+    "count": 1,
+    "ratio_within_model": 0.000744047619047619
+  }
+]

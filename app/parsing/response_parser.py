@@ -102,7 +102,7 @@ def parse_model_response(text: str, allowed_article_ids: set[str]) -> ParseResul
                 reason=reason,
                 status=ParseStatus.FAILED,
                 parsed_json=payload,
-                error="selected_article_id missing or not in candidates",
+                error="E_INVALID_SELECTED_ARTICLE_ID: selected_article_id missing or not in candidates",
             )
         except json.JSONDecodeError as exc:
             recovered_selected_article_id = _normalize_selected_article_id(
@@ -116,7 +116,7 @@ def parse_model_response(text: str, allowed_article_ids: set[str]) -> ParseResul
                     reason=recovered_reason,
                     status=ParseStatus.SUCCESS,
                     parsed_json=None,
-                    error=f"Recovered from malformed JSON: {exc}",
+                    error=f"E_RECOVERED_MALFORMED_JSON: Recovered from malformed JSON: {exc}",
                 )
 
             fallback_id = _fallback_extract_article_id(text, allowed_article_ids)
@@ -126,14 +126,14 @@ def parse_model_response(text: str, allowed_article_ids: set[str]) -> ParseResul
                     reason="Fallback parse from non-JSON output.",
                     status=ParseStatus.FALLBACK,
                     parsed_json=None,
-                    error=f"json decode error: {exc}",
+                    error=f"E_MALFORMED_JSON: json decode error: {exc}",
                 )
             return ParseResult(
                 selected_article_id=None,
                 reason=None,
                 status=ParseStatus.FAILED,
                 parsed_json=None,
-                error=f"json decode error: {exc}",
+                error=f"E_MALFORMED_JSON: json decode error: {exc}",
             )
 
     fallback_id = _fallback_extract_article_id(text, allowed_article_ids)
@@ -143,7 +143,7 @@ def parse_model_response(text: str, allowed_article_ids: set[str]) -> ParseResul
             reason="Fallback parse from plain text output.",
             status=ParseStatus.FALLBACK,
             parsed_json=None,
-            error="No JSON object found in output",
+            error="E_NO_JSON_OBJECT: No JSON object found in output",
         )
 
     return ParseResult(
@@ -151,5 +151,5 @@ def parse_model_response(text: str, allowed_article_ids: set[str]) -> ParseResul
         reason=None,
         status=ParseStatus.FAILED,
         parsed_json=None,
-        error="No JSON object found and no candidate id detected",
+        error="E_NO_JSON_AND_NO_CANDIDATE: No JSON object found and no candidate id detected",
     )

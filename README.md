@@ -1,5 +1,11 @@
 # Sourcerers: Source-Selection Robustness in LLMs
 
+[![Streamlit Dashboard](https://img.shields.io/badge/Streamlit-Dashboard-FF4B4B?logo=streamlit&logoColor=white)](https://llm-news-bias-analysis.streamlit.app)
+[![API Docs](https://img.shields.io/badge/API-Swagger%20Docs-009688?logo=fastapi&logoColor=white)](https://sourcerers-analytics-api.onrender.com/docs)
+[![CI](https://github.com/amirhossein-razlighi/LLM-News-Bias-Analysis/actions/workflows/ci.yml/badge.svg)](https://github.com/amirhossein-razlighi/LLM-News-Bias-Analysis/actions/workflows/ci.yml)
+[![Docs](https://github.com/amirhossein-razlighi/LLM-News-Bias-Analysis/actions/workflows/docs.yml/badge.svg)](https://github.com/amirhossein-razlighi/LLM-News-Bias-Analysis/actions/workflows/docs.yml)
+[![GitHub Pages](https://img.shields.io/badge/GitHub%20Pages-Documentation-222222?logo=githubpages&logoColor=white)](https://amirhossein-razlighi.github.io/LLM-News-Bias-Analysis/)
+
 A reproducible NLP experimentation framework for analyzing how LLMs choose among politically diverse news sources under controlled prompt conditions.
 
 This repository supports:

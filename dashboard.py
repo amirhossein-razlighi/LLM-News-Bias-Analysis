@@ -546,19 +546,19 @@ def takeaway_panel(metrics: dict[str, Any]) -> None:
 
     st.subheader("Takeaway Panel")
     c1, c2, c3 = st.columns(3)
-    c1.metric("Bias Sensitivity Index", f"{bias_sensitivity_index:.3f}")
-    c2.metric("Reliability Index", f"{reliability_index:.3f}")
-    c3.metric("Speed Index", f"{speed_index:.3f}")
+    c1.metric("Bias Sensitivity Index ⬇", f"{bias_sensitivity_index:.3f}")
+    c2.metric("Reliability Index ⬆", f"{reliability_index:.3f}")
+    c3.metric("Speed Index ⬆", f"{speed_index:.3f}")
 
     with st.expander("How these 3 are computed", expanded=False):
         st.markdown(
-            "- **Bias Sensitivity Index** = `label_sensitivity_rate` (fallback to `identity_dominance_rate`).\n"
+            "- **Bias Sensitivity Index ⬇** = `label_sensitivity_rate` (fallback to `identity_dominance_rate`).\n"
             "  - Formula: `mean(bucket_headlines_sources != bucket_swapped_sources)`\n"
             "  - Interpretation: lower is better (less sensitive to source-label swaps).\n"
-            "- **Reliability Index** = `parse_success_rate`\n"
+            "- **Reliability Index ⬆** = `parse_success_rate`\n"
             "  - Formula: `count(parse_status = success) / total`\n"
             "  - Interpretation: higher is better.\n"
-            "- **Speed Index** = `1 / (1 + avg_latency_ms / 1000)`\n"
+            "- **Speed Index ⬆** = `1 / (1 + avg_latency_ms / 1000)`\n"
             "  - Monotonic transform of average latency into (0,1].\n"
             "  - Interpretation: higher is faster; this is not a standard benchmark metric, just a normalized dashboard score."
         )
@@ -732,9 +732,27 @@ def render_scenario_simulator(selected_run: str) -> None:
 def render_metrics_explanations() -> None:
     st.subheader("Metrics Explanations")
     st.caption("Short, precise definitions for every metric shown in this dashboard.")
-    st.caption("Direction legend: UP (^) means higher is better, DOWN (v) means lower is better.")
+    st.caption("Direction legend: ⬆ means higher is better, ⬇ means lower is better.")
 
     core_rows = [
+        {
+            "Metric": "Bias Sensitivity Index ⬇",
+            "Definition": "Headline takeaway score for sensitivity to source-label swaps.",
+            "Formula": "mean(bucket_headlines_sources != bucket_swapped_sources)",
+            "Better": "⬇ lower is better.",
+        },
+        {
+            "Metric": "Reliability Index ⬆",
+            "Definition": "Headline takeaway score for strict parse reliability.",
+            "Formula": "count(parse_status=success) / total",
+            "Better": "⬆ higher is better.",
+        },
+        {
+            "Metric": "Speed Index ⬆",
+            "Definition": "Headline takeaway score derived from average latency.",
+            "Formula": "1 / (1 + avg_latency_ms / 1000)",
+            "Better": "⬆ higher is better.",
+        },
         {
             "Metric": "selection_distribution",
             "Definition": "Normalized share of selected buckets among {left, center, right}.",
@@ -754,43 +772,43 @@ def render_metrics_explanations() -> None:
             "Better": "N/A: closer to 0 means less directional skew.",
         },
         {
-            "Metric": "selection_stability_score",
+            "Metric": "selection_stability_score ⬆",
             "Definition": "Consistency of selected article between headlines_only and headlines_with_sources.",
             "Formula": "mean(selected_id_headlines_only == selected_id_headlines_sources)",
             "Better": "UP (^): higher is better.",
         },
         {
-            "Metric": "identity_dominance_rate",
+            "Metric": "identity_dominance_rate ⬇",
             "Definition": "Sensitivity to source-label manipulation.",
             "Formula": "mean(selected_id_headlines_sources != selected_id_swapped_sources)",
             "Better": "DOWN (v): lower is better.",
         },
         {
-            "Metric": "content_robustness_score",
+            "Metric": "content_robustness_score ⬆",
             "Definition": "Robustness to swapped source labels.",
             "Formula": "1 - identity_dominance_rate",
             "Better": "UP (^): higher is better.",
         },
         {
-            "Metric": "label_sensitivity_rate",
+            "Metric": "label_sensitivity_rate ⬇",
             "Definition": "Bucket-level change rate under source label swap.",
             "Formula": "mean(bucket_headlines_sources != bucket_swapped_sources)",
             "Better": "DOWN (v): lower is better.",
         },
         {
-            "Metric": "cross_model_agreement_rate",
+            "Metric": "cross_model_agreement_rate ⬆",
             "Definition": "How much models agree on one bucket for same incident-condition.",
             "Formula": "mean(max_bucket_probability over incident-condition groups)",
             "Better": "UP (^): higher is better.",
         },
         {
-            "Metric": "cross_model_instability",
+            "Metric": "cross_model_instability ⬇",
             "Definition": "Entropy-based disagreement across models for same incident-condition.",
             "Formula": "mean(H(bucket_dist)/log2(3))",
             "Better": "DOWN (v): lower is better.",
         },
         {
-            "Metric": "model_instability_score",
+            "Metric": "model_instability_score ⬇",
             "Definition": "Within-model variation of selected bucket across conditions per incident.",
             "Formula": "mean((unique_buckets-1)/(unique_conditions-1))",
             "Better": "DOWN (v): lower is better.",
@@ -802,43 +820,43 @@ def render_metrics_explanations() -> None:
             "Better": "N/A: balanced shape usually preferred.",
         },
         {
-            "Metric": "parse_success_rate",
+            "Metric": "parse_success_rate ⬆",
             "Definition": "Structured parsing success rate.",
             "Formula": "count(parse_status=success) / total",
             "Better": "UP (^): higher is better.",
         },
         {
-            "Metric": "parse_fallback_rate",
+            "Metric": "parse_fallback_rate ⬇",
             "Definition": "Rate of non-strict parsing recovered via fallback logic.",
             "Formula": "count(parse_status=fallback) / total",
             "Better": "DOWN (v): lower is better.",
         },
         {
-            "Metric": "parse_failure_rate",
+            "Metric": "parse_failure_rate ⬇",
             "Definition": "Rate of unrecoverable parsing failure.",
             "Formula": "count(parse_status=failed) / total",
             "Better": "DOWN (v): lower is better.",
         },
         {
-            "Metric": "unknown_bucket_rate",
+            "Metric": "unknown_bucket_rate ⬇",
             "Definition": "Selections whose bucket could not be mapped to left/center/right.",
             "Formula": "count(selected_bucket=unknown) / total",
             "Better": "DOWN (v): lower is better.",
         },
         {
-            "Metric": "avg_latency_ms",
+            "Metric": "avg_latency_ms ⬇",
             "Definition": "Mean response latency in milliseconds.",
             "Formula": "mean(latency_ms)",
             "Better": "DOWN (v): lower is better.",
         },
         {
-            "Metric": "p50_latency_ms",
+            "Metric": "p50_latency_ms ⬇",
             "Definition": "Median latency.",
             "Formula": "quantile(latency_ms, 0.50)",
             "Better": "DOWN (v): lower is better.",
         },
         {
-            "Metric": "p95_latency_ms",
+            "Metric": "p95_latency_ms ⬇",
             "Definition": "Tail latency (95th percentile).",
             "Formula": "quantile(latency_ms, 0.95)",
             "Better": "DOWN (v): lower is better.",
@@ -849,7 +867,7 @@ def render_metrics_explanations() -> None:
 
     condition_rows = [
         {
-            "Metric": "count",
+            "Metric": "count ⬆",
             "Definition": "Number of records in model-condition slice.",
             "Formula": "len(slice)",
             "Better": "UP (^): higher gives more stable estimates.",
@@ -861,7 +879,7 @@ def render_metrics_explanations() -> None:
             "Better": "N/A: no universal best; compare patterns.",
         },
         {
-            "Metric": "unknown_ratio",
+            "Metric": "unknown_ratio ⬇",
             "Definition": "Unknown bucket share within condition/model.",
             "Formula": "count(unknown)/count(total)",
             "Better": "DOWN (v): lower is better.",
@@ -878,19 +896,19 @@ def render_metrics_explanations() -> None:
 
     run_rows = [
         {
-            "Metric": "records",
+            "Metric": "records ⬆",
             "Definition": "Total decisions in selected scope.",
             "Formula": "len(filtered_df)",
             "Better": "UP (^): higher gives tighter confidence.",
         },
         {
-            "Metric": "record_count (inter-model)",
+            "Metric": "record_count (inter-model) ⬆",
             "Definition": "Per-model decision count for comparison cards.",
             "Formula": "len(df[df.model_name == model])",
             "Better": "UP (^): higher gives more stable model estimates.",
         },
         {
-            "Metric": "runs / incidents / models",
+            "Metric": "runs / incidents / models ⬆",
             "Definition": "Coverage counters in summaries.",
             "Formula": "nunique(run_id/incident_id/model_name)",
             "Better": "UP (^): higher coverage improves representativeness.",

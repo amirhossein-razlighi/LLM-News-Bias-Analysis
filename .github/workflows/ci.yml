@@ -80,14 +80,14 @@ jobs:
           if int(payload["condition_count"]) <= 0:
               raise SystemExit("condition_count must be > 0")
 
-            required_files = [
+          required_files = [
               Path("docs/figures/model_summary.md"),
               Path("docs/figures/qualitative_errors.md"),
               Path("docs/figures/qualitative_errors.json"),
               Path("docs/figures/limitations.md"),
-            ]
-            missing_files = [str(path) for path in required_files if not path.exists()]
-            if missing_files:
+          ]
+          missing_files = [str(path) for path in required_files if not path.exists()]
+          if missing_files:
               raise SystemExit(f"Missing required report assets: {missing_files}")
           PY
 

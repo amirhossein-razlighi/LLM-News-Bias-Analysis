@@ -359,7 +359,10 @@ def render_inter_model_overview(inter_model_data: dict[str, Any]) -> None:
         key="best_model_objective",
     )
     sort_col, ascending = objective_options[objective]
-    ranking = inter_df[["model", sort_col, "parse_success_rate", "avg_latency_ms", "content_robustness_score"]].sort_values(sort_col, ascending=ascending)
+    ranking_columns = ["model", sort_col, "parse_success_rate", "avg_latency_ms", "content_robustness_score"]
+    # Keep stable order while removing duplicates to avoid non-unique label errors in sort_values.
+    ranking_columns = list(dict.fromkeys(ranking_columns))
+    ranking = inter_df[ranking_columns].sort_values(sort_col, ascending=ascending)
     st.markdown("**Objective Ranking**")
     st.dataframe(ranking, use_container_width=True, hide_index=True)
 
@@ -831,6 +834,10 @@ curl -X POST http://127.0.0.1:8000/ingest/runs \\
     if snapshot is not None:
         metrics_cards(snapshot["metrics"], snapshot["count"])
         takeaway_panel(snapshot["metrics"])
+        st.subheader("Overview Distributions")
+        render_distribution_charts(snapshot["metrics"])
+        with st.expander("Detailed metrics snapshot", expanded=False):
+            st.json(snapshot["metrics"])
 
         st.subheader("Runs")
         if snapshot["runs"]:

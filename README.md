@@ -224,6 +224,16 @@ Generated from existing run artifacts in this repository using app/cli/generate_
 
 - [Open interactive Sankey](docs/figures/condition_to_bucket_sankey.html)
 
+Sankey flow snapshot (counts extracted from the generated interactive figure):
+
+| condition | to_left | to_center | to_right | total |
+| --- | --- | --- | --- | --- |
+| headlines_only | 833 | 779 | 636 | 2248 |
+| headlines_with_manipulated_sources | 1000 | 442 | 834 | 2276 |
+| headlines_with_sources | 1054 | 919 | 303 | 2276 |
+| sources_only | 648 | 1471 | 171 | 2290 |
+
+![Condition to bucket Sankey snapshot](docs/figures/sankey_plot.png)
 ### Additional generated analysis assets
 
 - [Counterfactual effects table](docs/figures/counterfactual_effects.md)
@@ -231,6 +241,80 @@ Generated from existing run artifacts in this repository using app/cli/generate_
 - [Failure taxonomy table](docs/figures/failure_taxonomy.md)
 - [Model instability table](docs/figures/model_instability.md)
 - [Qualitative error examples](docs/figures/qualitative_errors.md)
+
+#### Counterfactual effects (inline)
+
+| model | n_pairs | label_sensitivity_rate | ci95_low | ci95_high |
+| --- | --- | --- | --- | --- |
+| llama3.2:3b | 298 | 0.5268456375838926 | 0.47315436241610737 | 0.5838926174496645 |
+| mistral:latest | 310 | 0.5258064516129032 | 0.46766129032258064 | 0.5806451612903226 |
+| gemma3:4b | 332 | 0.5030120481927711 | 0.44879518072289154 | 0.5572289156626506 |
+| qwen2.5:7b | 335 | 0.4955223880597015 | 0.4417910447761194 | 0.5492537313432836 |
+| gemma4:latest | 311 | 0.4212218649517685 | 0.3664790996784566 | 0.47596463022508034 |
+| phi4-mini:3.8b | 330 | 0.41515151515151516 | 0.3606060606060606 | 0.4636363636363636 |
+| qwen3:8b | 336 | 0.40476190476190477 | 0.3482142857142857 | 0.45535714285714285 |
+
+#### Cross-model agreement (inline)
+
+| condition | n_groups | mean_agreement_rate | mean_normalized_entropy | instability_score |
+| --- | --- | --- | --- | --- |
+| headlines_only | 424 | 0.6409946840371369 | 0.6328563709804557 | 0.6328563709804557 |
+| headlines_with_manipulated_sources | 424 | 0.6239845387840671 | 0.6542016926693891 | 0.6542016926693891 |
+| headlines_with_sources | 424 | 0.654039383048817 | 0.6167524886152344 | 0.6167524886152344 |
+| sources_only | 424 | 0.7438978736148548 | 0.4654712053731028 | 0.4654712053731028 |
+
+#### Failure taxonomy (inline)
+
+| model | parse_status | error_category | count | ratio_within_model |
+| --- | --- | --- | --- | --- |
+| gemma3:4b | success | other | 1335 | 0.9933035714285714 |
+| gemma3:4b | failed | invalid_or_missing_selected_article_id | 9 | 0.006696428571428571 |
+| gemma4:latest | success | other | 1247 | 0.999198717948718 |
+| gemma4:latest | failed | invalid_or_missing_selected_article_id | 1 | 0.0008012820512820513 |
+| llama3.2:3b | success | other | 1249 | 0.9293154761904762 |
+| llama3.2:3b | failed | invalid_or_missing_selected_article_id | 95 | 0.07068452380952381 |
+| mistral:latest | success | other | 1243 | 0.9959935897435898 |
+| mistral:latest | failed | invalid_or_missing_selected_article_id | 5 | 0.004006410256410256 |
+| phi4-mini:3.8b | success | other | 1298 | 0.9657738095238095 |
+| phi4-mini:3.8b | fallback | fallback_after_malformed_json | 32 | 0.023809523809523808 |
+| phi4-mini:3.8b | failed | invalid_or_missing_selected_article_id | 14 | 0.010416666666666666 |
+| qwen2.5:7b | success | other | 1343 | 0.9992559523809523 |
+| qwen2.5:7b | failed | other | 1 | 0.000744047619047619 |
+| qwen3:8b | success | other | 1343 | 0.9992559523809523 |
+| qwen3:8b | failed | invalid_or_missing_selected_article_id | 1 | 0.000744047619047619 |
+
+#### Model instability (inline)
+
+| model | n_incidents | instability_score |
+| --- | --- | --- |
+| qwen2.5:7b | 112 | 0.6279761904761906 |
+| llama3.2:3b | 112 | 0.625 |
+| phi4-mini:3.8b | 112 | 0.6190476190476192 |
+| gemma3:4b | 112 | 0.6130952380952381 |
+| qwen3:8b | 112 | 0.6101190476190476 |
+| mistral:latest | 104 | 0.592948717948718 |
+| gemma4:latest | 104 | 0.5576923076923077 |
+
+#### Qualitative error examples (inline)
+
+Preview excerpt from generated qualitative errors:
+
+```text
+run_20260416_171758 | qwen3:8b | headlines_only | topic_fake_news | failed | selected_article_id missing or not in candidates
+response: {"selected_article_id": "7JFQGvJ0LKQOMe0t", "reason": "Offers a proactive approach to combating fake news."}
+
+run_20260416_171758 | gemma3:4b | headlines_with_manipulated_sources | topic_technology | failed | selected_article_id missing or not in candidates
+response: {"selected_article_id": "0xcOUPRRvmYf5mX1H", "reason": "This article discusses the potential role of big tech in radicalization ..."}
+
+run_20260416_171758 | gemma3:4b | headlines_with_sources | topic_us_house | failed | selected_article_id missing or not in candidates
+response: {"selected_article_id": "3", "reason": "The article from Vox provides a good overview of the situation ..."}
+
+run_20260416_171758 | gemma3:4b | headlines_only | topic_epa | failed | selected_article_id missing or not in candidates
+response: {"selected_article_id": "3", "reason": "The article detailing the Executive action to kill the Clean Power Plan ..."}
+
+run_20260416_171758 | gemma3:4b | headlines_only | topic_business | failed | selected_article_id missing or not in candidates
+response: {"selected_article_id": "1", "reason": "This article discusses a major leadership change at PepsiCo ..."}
+```
 
 ## 9) FastAPI Analytics (Optional)
 

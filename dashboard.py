@@ -303,12 +303,12 @@ def render_llm_summary_section(summary_path: str) -> None:
         payload.get("generator"), dict) else {}
     fallback = _build_snapshot_fallbacks(snapshot)
 
-    header_cols = st.columns([2, 1, 1, 1])
+    header_cols = st.columns([2, 1, 1])
     header_cols[0].markdown(
         f"**{str(llm_summary.get('headline') or 'Experiment Intelligence Snapshot')}**")
-    header_cols[1].metric("Records", int(snapshot.get("record_count", 0) or 0))
-    header_cols[2].metric("Models", len(snapshot.get("models", []) or []))
-    header_cols[3].metric("Runs", len(snapshot.get("runs", []) or []))
+    # header_cols[1].metric("Records", int(snapshot.get("record_count", 0) or 0))
+    header_cols[1].metric("Models", len(snapshot.get("models", []) or []))
+    header_cols[2].metric("Runs", len(snapshot.get("runs", []) or []))
 
     best = llm_summary.get("best_model") if isinstance(
         llm_summary.get("best_model"), dict) else {}
